@@ -32,7 +32,7 @@
 ## 🚀 快速开始
 
 ### 在线体验
-访问 [GitHub Pages](https://laddzhao.github.io/cryptolock/) 直接使用
+访问 [GitHub Pages](https://laddzhao.github.io/CryptoLock/) 直接使用
 
 ### 本地部署（推荐）
 ```bash

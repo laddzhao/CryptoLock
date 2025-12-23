@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>文件校验（SHA‑256） — 本地校验器</title>
+  <style>
+    :root{--bg:#f6f8fb;--card:#fff;--accent:#0ea5e9;--ok:#16a34a;--bad:#dc2626;--muted:#6b7280}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#0f172a;margin:0;padding:18px}
+    .wrap{max-width:900px;margin:0 auto;background:var(--card);padding:18px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,0.06)}
+    h1{margin:0 0 6px}
+    .panel{background:#fbfdff;padding:12px;border-radius:8px;margin-top:12px}
+    label{display:block;margin:8px 0;font-weight:600}
+    input[type="file"], input[type="text"]{width:100%;padding:8px;border-radius:6px;border:1px solid #e6eef8}
+    .row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+    button{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+    .result{margin-top:12px;padding:10px;border-radius:6px;font-weight:600}
+    .hashbox{word-break:break-all;background:#fff;padding:8px;border-radius:6px;border:1px solid #e6eef8}
+    .small{font-size:.9rem;color:var(--muted)}
+    a.back{color:var(--accent);text-decoration:none}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>文件校验详细说明与本地校验器（SHA‑256）</h1>
+    <p class="small">在本地计算文件哈希并与发送方提供的哈希比对。全部在浏览器本地执行，不会上传任何文件或数据。</p>
+
+    <div class="panel">
+      <h3 style="margin-top:0">发送方（简要步骤）</h3>
+      <ol class="small">
+        <li>把文件保存到本地（例如 index.html）。</li>
+        <li>在本机计算 SHA‑256：macOS/Linux: <code>shasum -a 256 index.html</code>；Windows PowerShell: <code>Get-FileHash .\index.html -Algorithm SHA256</code></li>
+        <li>通过另一条渠道（电话/短信/另一款聊天）把哈希字符串发给接收方。</li>
+      </ol>
+    </div>
+
+    <div class="panel" aria-live="polite">
+      <h3 style="margin-top:0">接收方操作 — 本地校验（使用本页）</h3>
+      <label>1) 选择要校验的本地文件</label>
+      <input id="fileInput" type="file" />
+
+      <label>2) 粘贴发送方给你的 SHA‑256 字符串</label>
+      <input id="expectedHash" type="text" placeholder="例如：8d1c7d86c72b6cd4fc0e55c66cda1e9d6e40f319981d3cf9f96c23436e307c9f" />
+
+      <div class="row">
+        <button id="calcBtn">计算并比对 SHA‑256</button>
+        <button id="pasteExpected" style="background:#e6eef8;color:#0f172a;border:none;padding:8px 12px;border-radius:6px;cursor:pointer">粘贴剪贴板到期待值</button>
+        <a class="back" href="index.html" style="margin-left:auto">← 返回加密页面</a>
+      </div>
+
+      <div id="result" class="result" style="display:none"></div>
+
+      <div style="margin-top:12px">
+        <div class="small">计算出的哈希（HEX，大写）：</div>
+        <div id="computedHash" class="hashbox">尚未计算</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-top:0">若校验失败怎么办（简要）</h3>
+      <ol class="small">
+        <li>不要打开该文件或输入口令。</li>
+        <li>通过电话确认发送方的哈希是否正确；必要时重传文件并使用不同渠道发送校验值。</li>
+        <li>若文件来自网络且校验失败，请勿使用，联系发布者核实并检查发布渠道安全（2FA、提交记录）。</li>
+      </ol>
+    </div>
+  </main>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const expectedInput = document.getElementById('expectedHash');
+const calcBtn = document.getElementById('calcBtn');
+const resultEl = document.getElementById('result');
+const computedEl = document.getElementById('computedHash');
+const pasteExpected = document.getElementById('pasteExpected');
+
+function bufToHex(buffer){
+  return Array.prototype.map.call(new Uint8Array(buffer), x => ('00' + x.toString(16)).slice(-2)).join('').toUpperCase();
+}
+
+async function computeFileSHA256(file){
+  const ab = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', ab);
+  return bufToHex(hashBuffer);
+}
+
+calcBtn.addEventListener('click', async () => {
+  resultEl.style.display = 'none';
+  computedEl.textContent = '计算中...';
+  const file = fileInput.files[0];
+  if (!file){ alert('请选择要校验的文件'); computedEl.textContent='尚未计算'; return; }
+  try {
+    const hex = await computeFileSHA256(file);
+    computedEl.textContent = hex;
+    const expected = (expectedInput.value || '').replace(/\s+/g,'').toUpperCase();
+    if (!expected) {
+      resultEl.style.display = 'block';
+      resultEl.style.background = 'linear-gradient(90deg,#fff7ed,#fffbeb)';
+      resultEl.textContent = '已计算出文件哈希，请把发送方给你的哈希粘贴到上方输入框并再次比对。';
+      return;
+    }
+    if (hex === expected) {
+      resultEl.style.display = 'block';
+      resultEl.style.background = 'linear-gradient(90deg,#ecfdf5,#f0fdf4)';
+      resultEl.style.borderLeft = '4px solid var(--ok)';
+      resultEl.textContent = '校验通过：OK（哈希一致）';
+    } else {
+      resultEl.style.display = 'block';
+      resultEl.style.background = 'linear-gradient(90deg,#fff1f2,#fff7f8)';
+      resultEl.style.borderLeft = '4px solid var(--bad)';
+      resultEl.textContent = '校验失败：FAILED（哈希不一致）。请勿打开文件并联系发送方。';
+    }
+  } catch (e) {
+    console.error(e);
+    alert('计算失败：' + e.message);
+    computedEl.textContent = '计算错误';
+  }
+});
+
+pasteExpected.addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) expectedInput.value = text.trim();
+    else alert('剪贴板为空');
+  } catch (e) {
+    alert('无法读取剪贴板：' + e.message);
+  }
+});
+</script>
+</body>
+</html>

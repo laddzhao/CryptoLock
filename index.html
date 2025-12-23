@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>离线/在线文本加解密 — Argon2 (可选) + 回退 PBKDF2</title>
+  <meta name="description" content="在浏览器本地进行文本加/解密。默认优先使用 Argon2id（libsodium），若不可用回退 PBKDF2。建议下载离线文件并通过独立渠道传递校验值与口令。">
+  <style>
+    :root{--bg:#f6f8fb;--card:#fff;--accent:#2563eb;--muted:#6b7280;--ok:#16a34a;--danger:#dc2626}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);margin:0;color:#0f172a;padding:18px}
+    .wrap{max-width:940px;margin:0 auto;background:var(--card);padding:20px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,0.08)}
+    header{display:flex;align-items:center;gap:12px}
+    header h1{margin:0;font-size:1.15rem}
+    .muted{color:var(--muted)}
+    label{display:block;margin:12px 0;font-weight:600}
+    textarea,input[type="password"],input[type="text"],select{width:100%;padding:10px;border-radius:8px;border:1px solid #e6eef8;font-family:inherit;resize:vertical}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    button{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+    .panel{background:#f8fafc;padding:12px;border-radius:8px;margin-top:12px}
+    .small{font-size:.9rem;color:var(--muted)}
+    .status{font-size:.95rem;margin-top:8px}
+    .kdf-info{font-size:.9rem;color:#334155;margin-top:6px}
+    .danger{color:var(--danger);font-weight:700}
+    .ok{color:var(--ok);font-weight:700}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>离线/在线文本加/解密 — 支持 Argon2id（libsodium）</h1>
+    </header>
+
+    <p class="small">本页面默认优先使用 Argon2id（通过 libsodium-wrappers 的 crypto_pwhash）将口令派生为密钥；如果 libsodium 未加载或不可用，将回退到浏览器内置的 PBKDF2。强烈建议在生产/离线场景把 libsodium 打包到单文件中并通过独立渠道分发。</p>
+
+    <div class="panel">
+      <label>KDF 选择（优先 Argon2）</label>
+      <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;align-items:center">
+        <div>
+          <label>使用 Argon2（如果可用）</label>
+          <select id="argonPreset">
+            <option value="INTERACTIVE">Interactive (最快, 内存/时间最小)</option>
+            <option value="MODERATE" selected>Moderate (平衡: 推荐)</option>
+            <option value="SENSITIVE">Sensitive (更慢更安全)</option>
+          </select>
+          <div class="kdf-info">若 libsodium 可用，页面会使用 Argon2id 的预设参数；若不可用则使用 PBKDF2（iterations 可见于源码）。</div>
+        </div>
+
+        <div>
+          <label>当前 KDF 状态</label>
+          <div id="kdfStatus" class="status">检测中…</div>
+        </div>
+      </div>
+    </div>
+
+    <label>要加密的文本</label>
+    <textarea id="plaintext" rows="6" placeholder="在此输入要加密的文本"></textarea>
+
+    <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;margin-top:8px">
+      <label>口令（用于派生密钥） <span class="small muted">（建议 ≥12 字符或使用生成按钮）</span>
+        <input id="password" type="password" placeholder="输入口令">
+      </label>
+
+      <div>
+        <label>口令（可见，便于复制）</label>
+        <input id="passwordVisible" type="text" placeholder="可选：显示口令">
+        <div class="row" style="margin-top:8px">
+          <button id="genBtn">生成随机口令</button>
+          <button id="copyPassBtn">复制口令</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <button id="encryptBtn">加密</button>
+      <button id="decryptBtn">解密</button>
+      <button id="copyBtn">复制输出</button>
+      <button id="downloadBtn">下载密文</button>
+      <a href="verify.html" style="margin-left:8px;color:var(--accent)">→ 校验 & 使用说明</a>
+    </div>
+
+    <label style="margin-top:12px">输出（Base64 JSON：包含 salt / iv / ciphertext）</label>
+    <textarea id="output" rows="6" placeholder="加密后会显示在这里；把该字段粘贴给朋友并通过独立渠道告知口令。"></textarea>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px">小提示</h3>
+      <ul class="small">
+        <li>若要离线使用，请把本页连同 libsodium 库打包发给朋友并让朋友在本地打开 verify.html 校验哈希再使用。</li>
+        <li>若页面短暂卡顿（Argon2 计算期间），属于正常，说明派生较强。可选择 preset 降低强度。</li>
+      </ul>
+    </div>
+
+    <div class="small" style="margin-top:10px">加载 libsodium（可选）：
+      <button id="loadSodiumBtn" style="margin-left:8px;background:#e6eef8;color:#0f172a;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">从 CDN 加载 libsodium</button>
+    </div>
+  </main>
+
+  <!-- 注意：
+       - 本示例使用 libsodium-wrappers（WASM）来调用 Argon2id（crypto_pwhash）。
+       - 生产/离线请把 libsodium-wrappers 打包到仓库并本地引用，避免 CDN 依赖。 -->
+  <script>
+  // Minimal implementation: prefer Argon2 (libsodium) when available; otherwise fallback to PBKDF2.
+  // If you want fully offline single-file, download libsodium-wrappers JS and include it locally (or bundling).
+  const $ = id => document.getElementById(id);
+  const plaintextEl = $('plaintext');
+  const passwordEl = $('password');
+  const passwordVisibleEl = $('passwordVisible');
+  const outputEl = $('output');
+  const encryptBtn = $('encryptBtn');
+  const decryptBtn = $('decryptBtn');
+  const copyBtn = $('copyBtn');
+  const genBtn = $('genBtn');
+  const copyPassBtn = $('copyPassBtn');
+  const downloadBtn = $('downloadBtn');
+  const kdfStatus = $('kdfStatus');
+  const argonPreset = $('argonPreset');
+  const loadSodiumBtn = $('loadSodiumBtn');
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  // state
+  let sodiumReady = false;
+  let sodium = null;
+
+  // PBKDF2 fallback iterations
+  const PBKDF2_ITERATIONS = 200000;
+
+  function randBytes(len){ const b=new Uint8Array(len); crypto.getRandomValues(b); return b; }
+  function bufToBase64(buf){
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i=0;i<bytes.length;i+=chunk) binary += String.fromCharCode.apply(null, bytes.subarray(i,i+chunk));
+    return btoa(binary);
+  }
+  function base64ToArrayBuffer(b64){
+    const bin = atob(b64);
+    const len = bin.length;
+    const bytes = new Uint8Array(len);
+    for (let i=0;i<len;i++) bytes[i]=bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  // Attempt to detect sodium if already loaded
+  function detectSodium() {
+    if (window.sodium && window.sodium.ready) {
+      sodium = window.sodium;
+      sodium.ready.then(() => {
+        sodiumReady = true;
+        updateKdfStatus();
+      }).catch(() => {
+        sodiumReady = false;
+        updateKdfStatus();
+      });
+    } else {
+      sodiumReady = false;
+      updateKdfStatus();
+    }
+  }
+
+  function updateKdfStatus(){
+    if (sodiumReady) {
+      kdfStatus.innerHTML = 'Argon2id available via libsodium (' + (argonPreset.value||'MODERATE') + ')';
+      kdfStatus.className = 'status ok';
+    } else {
+      kdfStatus.innerHTML = 'Argon2 not available — 回退使用 PBKDF2';
+      kdfStatus.className = 'status';
+    }
+  }
+
+  // Load libsodium from CDN (optional). For production/offline, bundle locally instead.
+  loadSodiumBtn.addEventListener('click', () => {
+    loadSodiumBtn.disabled = true;
+    loadSodiumBtn.textContent = '加载中…（CDN）';
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.9/dist/modules/libsodium-wrappers.js';
+    script.onload = () => {
+      detectSodium();
+      loadSodiumBtn.textContent = '已加载 libsodium';
+      loadSodiumBtn.disabled = false;
+    };
+    script.onerror = () => {
+      alert('加载 libsodium 失败（请检查网络或改为本地打包）');
+      loadSodiumBtn.textContent = '加载 libsodium';
+      loadSodiumBtn.disabled = false;
+    };
+    document.head.appendChild(script);
+  });
+
+  // deriveKey: if sodiumReady, use Argon2id (crypto_pwhash). Otherwise PBKDF2.
+  async function deriveKey(password, saltUint8, presetName = 'MODERATE') {
+    if (sodiumReady && sodium) {
+      // Map presetName to libsodium constants
+      const preset = presetName || 'MODERATE';
+      let OPSLIMIT, MEMLIMIT;
+      if (preset === 'INTERACTIVE') {
+        OPSLIMIT = sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE;
+        MEMLIMIT = sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE;
+      } else if (preset === 'SENSITIVE') {
+        OPSLIMIT = sodium.crypto_pwhash_OPSLIMIT_SENSITIVE;
+        MEMLIMIT = sodium.crypto_pwhash_MEMLIMIT_SENSITIVE;
+      } else {
+        OPSLIMIT = sodium.crypto_pwhash_OPSLIMIT_MODERATE;
+        MEMLIMIT = sodium.crypto_pwhash_MEMLIMIT_MODERATE;
+      }
+
+      // password can be string
+      // ensure saltUint8 is Uint8Array and salt length equals SALTBYTES (libsodium default)
+      const salt = saltUint8 instanceof Uint8Array ? saltUint8 : new Uint8Array(saltUint8);
+      // derive 32 bytes (AES-256)
+      // Note: sodium.crypto_pwhash may require password as Uint8Array; it accepts string too.
+      const keyBytes = sodium.crypto_pwhash(
+        32,
+        password,
+        salt,
+        OPSLIMIT,
+        MEMLIMIT,
+        sodium.crypto_pwhash_ALG_ARGON2ID13
+      );
+      const keyBuf = sodium.to_array_buffer(keyBytes);
+      return crypto.subtle.importKey('raw', keyBuf, { name: 'AES-GCM', length: 256 }, false, ['encrypt','decrypt']);
+    } else {
+      // PBKDF2 fallback (compatible with previous implementation)
+      const passKey = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveKey']
+      );
+      return crypto.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          salt: saltUint8.buffer ? saltUint8.buffer : saltUint8,
+          iterations: PBKDF2_ITERATIONS,
+          hash: 'SHA-256'
+        },
+        passKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt','decrypt']
+      );
+    }
+  }
+
+  // encrypt/decrypt
+  async function encryptText(plaintext, password) {
+    // salt length: use libsodium salt length if sodiumReady, else 16 bytes
+    const saltLen = sodiumReady && sodium ? sodium.crypto_pwhash_SALTBYTES : 16;
+    const salt = randBytes(saltLen);
+    const iv = randBytes(12);
+    const preset = argonPreset.value;
+    const key = await deriveKey(password, salt, preset);
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(plaintext));
+    const payload = { v:1, kdf: sodiumReady ? 'argon2id' : 'pbkdf2', preset: sodiumReady ? preset : undefined, salt: bufToBase64(salt), iv: bufToBase64(iv), ct: bufToBase64(ct) };
+    return btoa(JSON.stringify(payload));
+  }
+
+  async function decryptText(b64payload, password) {
+    let json;
+    try { json = JSON.parse(atob(b64payload)); } catch (e) { throw new Error('密文格式错误（无法解析）'); }
+    if (!json.salt || !json.iv || !json.ct) throw new Error('缺少字段');
+    const saltBuf = base64ToArrayBuffer(json.salt);
+    const salt = new Uint8Array(saltBuf);
+    const iv = new Uint8Array(base64ToArrayBuffer(json.iv));
+    const ct = base64ToArrayBuffer(json.ct);
+    const preset = json.preset || argonPreset.value;
+    // If payload indicated it used argon2 but sodium not available, we still try deriveKey which will fallback to PBKDF2 (but decryption will fail)
+    const key = await deriveKey(password, salt, preset);
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    return decoder.decode(plainBuf);
+  }
+
+  // UI handlers
+  encryptBtn.addEventListener('click', async () => {
+    try {
+      const text = plaintextEl.value;
+      const password = passwordEl.value || passwordVisibleEl.value;
+      if (!text) return alert('请输入要加密的文本');
+      if (!password) return alert('请输入口令');
+      encryptBtn.disabled = true;
+      outputEl.value = await encryptText(text, password);
+    } catch (e) {
+      console.error(e);
+      alert('加密失败：' + (e.message || e));
+    } finally { encryptBtn.disabled = false; }
+  });
+
+  decryptBtn.addEventListener('click', async () => {
+    try {
+      const data = outputEl.value;
+      const password = passwordEl.value || passwordVisibleEl.value;
+      if (!data) return alert('请输入密文到输出框');
+      if (!password) return alert('请输入口令');
+      decryptBtn.disabled = true;
+      plaintextEl.value = await decryptText(data, password);
+    } catch (e) {
+      console.error(e);
+      alert('解密失败：' + (e.message || e));
+    } finally { decryptBtn.disabled = false; }
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    if (!outputEl.value) return alert('没有输出可以复制');
+    await navigator.clipboard.writeText(outputEl.value);
+    alert('已复制到剪贴板');
+  });
+
+  genBtn.addEventListener('click', () => {
+    const len = 20;
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}<>?,.';
+    const rnd = new Uint8Array(len);
+    crypto.getRandomValues(rnd);
+    let s = '';
+    for (let i=0;i<len;i++) s += chars[rnd[i] % chars.length];
+    passwordVisibleEl.value = s;
+    passwordEl.value = s;
+  });
+
+  copyPassBtn.addEventListener('click', async () => {
+    const p = passwordVisibleEl.value;
+    if (!p) return alert('没有口令可以复制');
+    await navigator.clipboard.writeText(p);
+    alert('口令已复制到剪贴板');
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const text = outputEl.value;
+    if (!text) return alert('没有密文可以下载');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'ciphertext.txt';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  // initial detection
+  detectSodium();
+  updateKdfStatus();
+
+  // If sodium loads later (e.g., user clicked load button), detect will update status after sodium.ready resolves.
+  </script>
+</body>
+</html>

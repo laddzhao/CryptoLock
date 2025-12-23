@@ -31,7 +31,7 @@
       <h1>离线/在线文本加/解密 — 支持 Argon2id（libsodium）</h1>
     </header>
 
-    <p class="small">本页面默认优先使用 Argon2id（通过 libsodium-wrappers 的 crypto_pwhash）将口令派生为密钥；如果 libsodium 未加载或不可用，将回退到浏览器内置的 PBKDF2。强烈建议在生产/离线场景把 libsodium 打包到单文件中并通过独立渠道分发。</p>
+    <p class="small">默认优先用 Argon2（更安全）把你输入的口令做成加密钥匙；如果浏览器里没有这个库，页面会自动退回使用浏览器自带的 PBKDF2。为了最安全，建议把整套文件（含库）下载打包后离线发给朋友，并通过另一条渠道单独告知口令或校验码。</p>
 
     <div class="panel">
       <label>KDF 选择（优先 Argon2）</label>

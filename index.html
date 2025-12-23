@@ -1,345 +1,1641 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="本地文本加解密工具，使用Argon2id和PBKDF2，完全在浏览器中运行">
   <title>离线/在线文本加解密 — Argon2 (可选) + 回退 PBKDF2</title>
-  <meta name="description" content="在浏览器本地进行文本加/解密。默认优先使用 Argon2id（libsodium），若不可用回退 PBKDF2。建议下载离线文件并通过独立渠道传递校验值与口令。">
   <style>
-    :root{--bg:#f6f8fb;--card:#fff;--accent:#2563eb;--muted:#6b7280;--ok:#16a34a;--danger:#dc2626}
-    *{box-sizing:border-box}
-    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);margin:0;color:#0f172a;padding:18px}
-    .wrap{max-width:940px;margin:0 auto;background:var(--card);padding:20px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,0.08)}
-    header{display:flex;align-items:center;gap:12px}
-    header h1{margin:0;font-size:1.15rem}
-    .muted{color:var(--muted)}
-    label{display:block;margin:12px 0;font-weight:600}
-    textarea,input[type="password"],input[type="text"],select{width:100%;padding:10px;border-radius:8px;border:1px solid #e6eef8;font-family:inherit;resize:vertical}
-    .row{display:flex;gap:8px;flex-wrap:wrap}
-    button{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
-    .panel{background:#f8fafc;padding:12px;border-radius:8px;margin-top:12px}
-    .small{font-size:.9rem;color:var(--muted)}
-    .status{font-size:.95rem;margin-top:8px}
-    .kdf-info{font-size:.9rem;color:#334155;margin-top:6px}
-    .danger{color:var(--danger);font-weight:700}
-    .ok{color:var(--ok);font-weight:700}
+    :root {
+      --bg: #f6f8fb;
+      --card: #fff;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --secondary: #0ea5e9;
+      --ok: #16a34a;
+      --danger: #dc2626;
+      --warning: #f59e0b;
+      --muted: #6b7280;
+      --border: #e6eef8;
+      --text: #0f172a;
+      --radius: 12px;
+      --shadow: 0 8px 30px rgba(2, 6, 23, 0.08);
+      --transition: all 0.2s ease;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --card: #1e293b;
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --secondary: #38bdf8;
+        --ok: #22c55e;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --muted: #94a3b8;
+        --border: #334155;
+        --text: #f1f5f9;
+      }
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 20px;
+      transition: var(--transition);
+    }
+    
+    .wrap {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: var(--card);
+      padding: 28px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      transition: var(--transition);
+    }
+    
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid var(--border);
+    }
+    
+    header h1 {
+      font-size: 1.5rem;
+      margin: 0;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .header-icon {
+      width: 28px;
+      height: 28px;
+      fill: var(--accent);
+    }
+    
+    .description {
+      color: var(--muted);
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+    
+    .section {
+      margin-bottom: 28px;
+    }
+    
+    .section-title {
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+      color: var(--text);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .section-title svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--accent);
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+    
+    textarea, input[type="password"], input[type="text"], select {
+      width: 100%;
+      padding: 14px;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: var(--transition);
+      resize: vertical;
+    }
+    
+    textarea:focus, input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    
+    textarea:hover, input:hover, select:hover {
+      border-color: var(--accent);
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .card {
+      background: var(--bg);
+      padding: 20px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      transition: var(--transition);
+    }
+    
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+    }
+    
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 48px;
+    }
+    
+    button:hover:not(:disabled) {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    }
+    
+    button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    button.secondary {
+      background: transparent;
+      color: var(--accent);
+      border: 2px solid var(--border);
+    }
+    
+    button.secondary:hover:not(:disabled) {
+      background: rgba(37, 99, 235, 0.1);
+      border-color: var(--accent);
+    }
+    
+    button.danger {
+      background: var(--danger);
+    }
+    
+    button.danger:hover:not(:disabled) {
+      background: #b91c1c;
+    }
+    
+    button.warning {
+      background: var(--warning);
+    }
+    
+    button.warning:hover:not(:disabled) {
+      background: #d97706;
+    }
+    
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      margin: 8px 0;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .status.ok {
+      background: rgba(22, 163, 74, 0.1);
+      color: var(--ok);
+      border-left: 4px solid var(--ok);
+    }
+    
+    .status.info {
+      background: rgba(14, 165, 233, 0.1);
+      color: var(--secondary);
+      border-left: 4px solid var(--secondary);
+    }
+    
+    .status.warning {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--warning);
+      border-left: 4px solid var(--warning);
+    }
+    
+    .status.error {
+      background: rgba(220, 38, 38, 0.1);
+      color: var(--danger);
+      border-left: 4px solid var(--danger);
+    }
+    
+    .kdf-info {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+    
+    .preset-option {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    
+    .preset-desc {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    
+    .password-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    .password-group input {
+      flex: 1;
+    }
+    
+    .toggle-password {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 10px;
+      cursor: pointer;
+      min-height: auto;
+    }
+    
+    .toggle-password:hover {
+      color: var(--text);
+      background: var(--border);
+    }
+    
+    .strength-meter {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    
+    .strength-bar {
+      height: 100%;
+      width: 0%;
+      transition: var(--transition);
+    }
+    
+    .strength-text {
+      font-size: 0.8rem;
+      margin-top: 4px;
+      color: var(--muted);
+    }
+    
+    .output-container {
+      position: relative;
+    }
+    
+    .output-actions {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 8px;
+    }
+    
+    .output-btn {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      color: var(--text);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    
+    .output-btn:hover {
+      background: var(--accent);
+      color: white;
+    }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    .modal-content {
+      background: var(--card);
+      padding: 30px;
+      border-radius: var(--radius);
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow);
+      animation: slideUp 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid var(--border);
+    }
+    
+    .modal-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .close-modal {
+      background: transparent;
+      border: none;
+      font-size: 24px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0;
+      min-height: auto;
+    }
+    
+    .close-modal:hover {
+      color: var(--text);
+    }
+    
+    .tips {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(37, 99, 235, 0.05));
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 24px;
+    }
+    
+    .tips h3 {
+      margin: 0 0 12px;
+      color: var(--accent);
+      font-size: 1.1rem;
+    }
+    
+    .tips ul {
+      padding-left: 20px;
+    }
+    
+    .tips li {
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 20px 0;
+    }
+    
+    @media (max-width: 768px) {
+      .wrap {
+        padding: 16px;
+      }
+      
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .row {
+        flex-direction: column;
+      }
+      
+      button {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .action-buttons {
+        flex-direction: column;
+      }
+      
+      .password-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
   </style>
 </head>
 <body>
   <main class="wrap">
     <header>
-      <h1>离线/在线文本加/解密 — 支持 Argon2id（libsodium）</h1>
+      <svg class="header-icon" viewBox="0 0 24 24">
+        <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+      </svg>
+      <h1>离线/在线文本加解密</h1>
     </header>
-
-    <p class="small">默认优先用 Argon2（更安全）把你输入的口令做成加密钥匙；如果浏览器里没有这个库，页面会自动退回使用浏览器自带的 PBKDF2。为了最安全，建议把整套文件（含库）下载打包后离线发给朋友，并通过另一条渠道单独告知口令或校验码。</p>
-
-    <div class="panel">
-      <label>KDF 选择（优先 Argon2）</label>
-      <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;align-items:center">
-        <div>
-          <label>使用 Argon2（如果可用）</label>
+    
+    <p class="description">
+      默认优先用 Argon2（更安全）把你输入的口令做成加密钥匙；如果浏览器里没有这个库，页面会自动退回使用浏览器自带的 PBKDF2。
+      为了最安全，建议把整套文件（含库）下载打包后离线发给朋友，并通过另一条渠道单独告知口令或校验码。
+    </p>
+    
+    <section class="section">
+      <h2 class="section-title">
+        <svg viewBox="0 0 24 24">
+          <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        加密设置
+      </h2>
+      
+      <div class="grid">
+        <div class="card">
+          <label for="argonPreset">KDF 算法与预设</label>
           <select id="argonPreset">
             <option value="INTERACTIVE">Interactive (最快, 内存/时间最小)</option>
             <option value="MODERATE" selected>Moderate (平衡: 推荐)</option>
             <option value="SENSITIVE">Sensitive (更慢更安全)</option>
+            <option value="CUSTOM">Custom (自定义参数)</option>
           </select>
-          <div class="kdf-info">若 libsodium 可用，页面会使用 Argon2id 的预设参数；若不可用则使用 PBKDF2（iterations 可见于源码）。</div>
+          
+          <div id="customParams" style="display: none; margin-top: 12px;">
+            <label>内存限制 (MB)</label>
+            <input type="range" id="memLimit" min="16" max="1024" step="16" value="256">
+            <div class="preset-option"><span>内存:</span><span id="memValue">256 MB</span></div>
+            
+            <label>操作限制</label>
+            <input type="range" id="opsLimit" min="2" max="10" step="1" value="5">
+            <div class="preset-option"><span>强度:</span><span id="opsValue">中等 (5)</span></div>
+          </div>
+          
+          <div class="kdf-info">
+            <span id="kdfStatus">检测中...</span>
+            <div style="margin-top: 8px;">
+              <button id="loadSodiumBtn" class="secondary" style="padding: 8px 12px; font-size: 0.85rem;">
+                加载 libsodium
+              </button>
+            </div>
+          </div>
         </div>
-
-        <div>
-          <label>当前 KDF 状态</label>
-          <div id="kdfStatus" class="status">检测中…</div>
+        
+        <div class="card">
+          <div class="section-title">算法信息</div>
+          <div class="kdf-info">
+            <p><strong>Argon2id</strong>: 内存困难密码哈希函数，抵抗侧信道攻击</p>
+            <p><strong>PBKDF2</strong>: 基于SHA-256的密钥派生函数，200,000次迭代</p>
+            <p><strong>AES-GCM</strong>: 认证加密算法，256位密钥</p>
+          </div>
+          <div class="status info" id="algorithmInfo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            使用现代加密标准，确保数据机密性和完整性
+          </div>
         </div>
       </div>
-    </div>
-
-    <label>要加密的文本</label>
-    <textarea id="plaintext" rows="6" placeholder="在此输入要加密的文本"></textarea>
-
-    <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;margin-top:8px">
-      <label>口令（用于派生密钥） <span class="small muted">（建议 ≥12 字符或使用生成按钮）</span>
-        <input id="password" type="password" placeholder="输入口令">
-      </label>
-
-      <div>
-        <label>口令（可见，便于复制）</label>
-        <input id="passwordVisible" type="text" placeholder="可选：显示口令">
-        <div class="row" style="margin-top:8px">
-          <button id="genBtn">生成随机口令</button>
-          <button id="copyPassBtn">复制口令</button>
+    </section>
+    
+    <section class="section">
+      <h2 class="section-title">
+        <svg viewBox="0 0 24 24">
+          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        输入文本与口令
+      </h2>
+      
+      <div class="grid">
+        <div class="card">
+          <label for="plaintext">要加密的文本</label>
+          <textarea id="plaintext" rows="6" placeholder="在此输入要加密的文本..."></textarea>
+          <div class="row">
+            <button id="clearTextBtn" class="secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+              清空
+            </button>
+            <button id="sampleTextBtn" class="secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              示例文本
+            </button>
+          </div>
+        </div>
+        
+        <div class="card">
+          <label for="password">口令</label>
+          <div class="password-group">
+            <input id="password" type="password" placeholder="输入加密口令...">
+            <button id="togglePassword" class="toggle-password" title="显示/隐藏口令">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+            </button>
+          </div>
+          
+          <div class="strength-meter">
+            <div id="strengthBar" class="strength-bar"></div>
+          </div>
+          <div id="strengthText" class="strength-text">口令强度</div>
+          
+          <div class="row" style="margin-top: 16px;">
+            <button id="genBtn" class="secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              生成口令
+            </button>
+            <button id="copyPassBtn" class="secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+              </svg>
+              复制口令
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-
-    <div class="row" style="margin-top:12px">
-      <button id="encryptBtn">加密</button>
-      <button id="decryptBtn">解密</button>
-      <button id="copyBtn">复制输出</button>
-      <button id="downloadBtn">下载密文</button>
-      <a href="verify.html" style="margin-left:8px;color:var(--accent)">→ 校验 & 使用说明</a>
-    </div>
-
-    <label style="margin-top:12px">输出（Base64 JSON：包含 salt / iv / ciphertext）</label>
-    <textarea id="output" rows="6" placeholder="加密后会显示在这里；把该字段粘贴给朋友并通过独立渠道告知口令。"></textarea>
-
-    <div class="panel">
-      <h3 style="margin:0 0 8px">小提示</h3>
-      <ul class="small">
-        <li>若要离线使用，请把本页连同 libsodium 库打包发给朋友并让朋友在本地打开 verify.html 校验哈希再使用。</li>
-        <li>若页面短暂卡顿（Argon2 计算期间），属于正常，说明派生较强。可选择 preset 降低强度。</li>
+    </section>
+    
+    <section class="section">
+      <h2 class="section-title">
+        <svg viewBox="0 0 24 24">
+          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        操作
+      </h2>
+      
+      <div class="action-buttons">
+        <button id="encryptBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+          加密文本
+        </button>
+        
+        <button id="decryptBtn" class="secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+          </svg>
+          解密文本
+        </button>
+        
+        <button id="copyBtn" class="secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+          </svg>
+          复制输出
+        </button>
+        
+        <button id="downloadBtn" class="secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          下载密文
+        </button>
+        
+        <a href="verify.html" style="text-decoration: none;">
+          <button class="warning">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            文件校验工具
+          </button>
+        </a>
+        
+        <button id="securityCheckBtn" class="secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+          安全检查
+        </button>
+      </div>
+    </section>
+    
+    <section class="section">
+      <h2 class="section-title">
+        <svg viewBox="0 0 24 24">
+          <path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+        </svg>
+        输出结果
+      </h2>
+      
+      <div class="output-container">
+        <label for="output">加密输出（Base64 JSON格式）</label>
+        <textarea id="output" rows="6" placeholder="加密或解密的结果将显示在这里..."></textarea>
+        
+        <div class="output-actions">
+          <button class="output-btn" id="formatOutputBtn">格式化</button>
+          <button class="output-btn" id="minifyOutputBtn">压缩</button>
+          <button class="output-btn" id="viewOutputBtn">查看详情</button>
+        </div>
+      </div>
+      
+      <div class="row" style="margin-top: 12px;">
+        <button id="clearOutputBtn" class="secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+          清空输出
+        </button>
+        <div id="operationStatus" class="status" style="flex: 1; display: none;"></div>
+      </div>
+    </section>
+    
+    <div class="tips">
+      <h3>安全使用建议</h3>
+      <ul>
+        <li>🔒 若要离线使用，请把本页连同 libsodium 库打包发给朋友并让朋友在本地打开 verify.html 校验哈希再使用。</li>
+        <li>⚡ 若页面短暂卡顿（Argon2 计算期间），属于正常，说明派生较强。可选择 preset 降低强度。</li>
+        <li>🔑 建议口令长度至少12个字符，包含大小写字母、数字和特殊字符。</li>
+        <li>📱 通过不同渠道传输密文和口令（例如：密文通过聊天软件发送，口令通过电话告知）。</li>
+        <li>💾 定期更新您的加密口令，不要重复使用相同口令。</li>
       </ul>
     </div>
-
-    <div class="small" style="margin-top:10px">加载 libsodium（可选）：
-      <button id="loadSodiumBtn" style="margin-left:8px;background:#e6eef8;color:#0f172a;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">从 CDN 加载 libsodium</button>
-    </div>
   </main>
+  
+  <!-- 安全检查模态框 -->
+  <div id="securityModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">安全检查</h2>
+        <button class="close-modal" id="closeSecurityModal">&times;</button>
+      </div>
+      <div id="securityCheckResults">
+        <!-- 安全检查结果将动态插入 -->
+      </div>
+      <button id="runSecurityCheck" style="margin-top: 20px;">重新运行检查</button>
+    </div>
+  </div>
+  
+  <!-- 输出详情模态框 -->
+  <div id="outputModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">加密输出详情</h2>
+        <button class="close-modal" id="closeOutputModal">&times;</button>
+      </div>
+      <pre id="outputDetails" style="background: var(--bg); padding: 15px; border-radius: 8px; overflow: auto; font-family: 'Courier New', monospace; font-size: 0.9rem;"></pre>
+    </div>
+  </div>
 
-  <!-- 注意：
-       - 本示例使用 libsodium-wrappers（WASM）来调用 Argon2id（crypto_pwhash）。
-       - 生产/离线请把 libsodium-wrappers 打包到仓库并本地引用，避免 CDN 依赖。 -->
+  <!-- 加载libsodium的脚本 -->
   <script>
-  // Minimal implementation: prefer Argon2 (libsodium) when available; otherwise fallback to PBKDF2.
-  // If you want fully offline single-file, download libsodium-wrappers JS and include it locally (or bundling).
-  const $ = id => document.getElementById(id);
-  const plaintextEl = $('plaintext');
-  const passwordEl = $('password');
-  const passwordVisibleEl = $('passwordVisible');
-  const outputEl = $('output');
-  const encryptBtn = $('encryptBtn');
-  const decryptBtn = $('decryptBtn');
-  const copyBtn = $('copyBtn');
-  const genBtn = $('genBtn');
-  const copyPassBtn = $('copyPassBtn');
-  const downloadBtn = $('downloadBtn');
-  const kdfStatus = $('kdfStatus');
-  const argonPreset = $('argonPreset');
-  const loadSodiumBtn = $('loadSodiumBtn');
+    // 配置
+    const CONFIG = {
+      PBKDF2_ITERATIONS: 200000,
+      DEFAULT_PRESET: 'MODERATE',
+      SALT_LENGTHS: {
+        ARGON2: 16,  // libsodium默认盐长度
+        PBKDF2: 16
+      }
+    };
 
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+    // DOM元素
+    const $ = id => document.getElementById(id);
+    const elements = {
+      // 输入
+      plaintext: $('plaintext'),
+      password: $('password'),
+      togglePassword: $('togglePassword'),
+      
+      // 配置
+      argonPreset: $('argonPreset'),
+      customParams: $('customParams'),
+      memLimit: $('memLimit'),
+      memValue: $('memValue'),
+      opsLimit: $('opsLimit'),
+      opsValue: $('opsValue'),
+      
+      // 输出
+      output: $('output'),
+      
+      // 按钮
+      encryptBtn: $('encryptBtn'),
+      decryptBtn: $('decryptBtn'),
+      copyBtn: $('copyBtn'),
+      downloadBtn: $('downloadBtn'),
+      genBtn: $('genBtn'),
+      copyPassBtn: $('copyPassBtn'),
+      clearTextBtn: $('clearTextBtn'),
+      clearOutputBtn: $('clearOutputBtn'),
+      sampleTextBtn: $('sampleTextBtn'),
+      loadSodiumBtn: $('loadSodiumBtn'),
+      securityCheckBtn: $('securityCheckBtn'),
+      
+      // 状态
+      kdfStatus: $('kdfStatus'),
+      algorithmInfo: $('algorithmInfo'),
+      operationStatus: $('operationStatus'),
+      
+      // 口令强度
+      strengthBar: $('strengthBar'),
+      strengthText: $('strengthText'),
+      
+      // 模态框
+      securityModal: $('securityModal'),
+      closeSecurityModal: $('closeSecurityModal'),
+      securityCheckResults: $('securityCheckResults'),
+      runSecurityCheck: $('runSecurityCheck'),
+      outputModal: $('outputModal'),
+      closeOutputModal: $('closeOutputModal'),
+      outputDetails: $('outputDetails'),
+      
+      // 输出操作
+      formatOutputBtn: $('formatOutputBtn'),
+      minifyOutputBtn: $('minifyOutputBtn'),
+      viewOutputBtn: $('viewOutputBtn')
+    };
 
-  // state
-  let sodiumReady = false;
-  let sodium = null;
+    // 状态变量
+    let sodiumReady = false;
+    let sodium = null;
+    let isPasswordVisible = false;
+    let currentOperation = null;
 
-  // PBKDF2 fallback iterations
-  const PBKDF2_ITERATIONS = 200000;
+    // 工具函数
+    const utils = {
+      encoder: new TextEncoder(),
+      decoder: new TextDecoder(),
 
-  function randBytes(len){ const b=new Uint8Array(len); crypto.getRandomValues(b); return b; }
-  function bufToBase64(buf){
-    const bytes = new Uint8Array(buf);
-    let binary = '';
-    const chunk = 0x8000;
-    for (let i=0;i<bytes.length;i+=chunk) binary += String.fromCharCode.apply(null, bytes.subarray(i,i+chunk));
-    return btoa(binary);
-  }
-  function base64ToArrayBuffer(b64){
-    const bin = atob(b64);
-    const len = bin.length;
-    const bytes = new Uint8Array(len);
-    for (let i=0;i<len;i++) bytes[i]=bin.charCodeAt(i);
-    return bytes.buffer;
-  }
+      // 生成随机字节
+      randomBytes(length) {
+        const bytes = new Uint8Array(length);
+        crypto.getRandomValues(bytes);
+        return bytes;
+      },
 
-  // Attempt to detect sodium if already loaded
-  function detectSodium() {
-    if (window.sodium && window.sodium.ready) {
-      sodium = window.sodium;
-      sodium.ready.then(() => {
-        sodiumReady = true;
-        updateKdfStatus();
-      }).catch(() => {
-        sodiumReady = false;
-        updateKdfStatus();
-      });
-    } else {
-      sodiumReady = false;
+      // ArrayBuffer转Base64
+      arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 0x8000; // 32KB chunks
+        
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        
+        return btoa(binary);
+      },
+
+      // Base64转ArrayBuffer
+      base64ToArrayBuffer(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        
+        return bytes.buffer;
+      },
+
+      // 格式化JSON
+      formatJSON(json, pretty = true) {
+        try {
+          const parsed = typeof json === 'string' ? JSON.parse(json) : json;
+          return pretty ? JSON.stringify(parsed, null, 2) : JSON.stringify(parsed);
+        } catch (e) {
+          return json;
+        }
+      },
+
+      // 计算口令强度
+      calculatePasswordStrength(password) {
+        if (!password) return { score: 0, text: '未输入' };
+        
+        let score = 0;
+        const length = password.length;
+        
+        // 长度评分
+        if (length >= 8) score += 1;
+        if (length >= 12) score += 1;
+        if (length >= 16) score += 1;
+        
+        // 字符类型评分
+        if (/[a-z]/.test(password)) score += 1; // 小写字母
+        if (/[A-Z]/.test(password)) score += 1; // 大写字母
+        if (/[0-9]/.test(password)) score += 1; // 数字
+        if (/[^a-zA-Z0-9]/.test(password)) score += 1; // 特殊字符
+        
+        // 多样性评分
+        const uniqueChars = new Set(password).size;
+        if (uniqueChars / length > 0.7) score += 1;
+        
+        // 映射到0-100的分数和文本描述
+        const maxScore = 8;
+        const percentage = Math.min(100, Math.round((score / maxScore) * 100));
+        
+        let text, color;
+        if (percentage < 30) {
+          text = '弱';
+          color = '#dc2626'; // 红色
+        } else if (percentage < 60) {
+          text = '一般';
+          color = '#f59e0b'; // 黄色
+        } else if (percentage < 80) {
+          text = '良好';
+          color = '#16a34a'; // 绿色
+        } else {
+          text = '强';
+          color = '#059669'; // 深绿色
+        }
+        
+        return { 
+          score: percentage, 
+          text: `${text} (${percentage}%)`,
+          color 
+        };
+      },
+
+      // 显示状态消息
+      showStatus(message, type = 'info', duration = 5000) {
+        const statusEl = elements.operationStatus;
+        statusEl.textContent = message;
+        statusEl.className = `status ${type}`;
+        statusEl.style.display = 'flex';
+        
+        if (duration > 0) {
+          setTimeout(() => {
+            statusEl.style.display = 'none';
+          }, duration);
+        }
+      },
+
+      // 加载libsodium
+      async loadLibsodium() {
+        try {
+          elements.loadSodiumBtn.disabled = true;
+          elements.loadSodiumBtn.innerHTML = '<span class="loading"></span> 加载中...';
+          
+          // 尝试从CDN加载
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.10/dist/modules/libsodium-wrappers.min.js';
+          
+          await new Promise((resolve, reject) => {
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+          
+          // 等待sodium准备就绪
+          await sodium.ready;
+          sodiumReady = true;
+          
+          utils.showStatus('✅ libsodium 已成功加载', 'ok');
+          updateKdfStatus();
+        } catch (error) {
+          console.error('加载libsodium失败:', error);
+          utils.showStatus('❌ 加载libsodium失败，将使用PBKDF2', 'error');
+          sodiumReady = false;
+        } finally {
+          elements.loadSodiumBtn.disabled = false;
+          elements.loadSodiumBtn.textContent = '加载 libsodium';
+        }
+      }
+    };
+
+    // 更新KDF状态显示
+    function updateKdfStatus() {
+      if (sodiumReady && sodium) {
+        const preset = elements.argonPreset.value;
+        elements.kdfStatus.innerHTML = `
+          <strong>✅ Argon2id 可用</strong> (${preset} 预设)
+          <div style="font-size: 0.85rem; margin-top: 4px; color: var(--ok);">
+            使用 libsodium 的 crypto_pwhash 进行密钥派生
+          </div>
+        `;
+        elements.kdfStatus.className = 'status ok';
+      } else {
+        elements.kdfStatus.innerHTML = `
+          <strong>⚠️ Argon2 不可用</strong>
+          <div style="font-size: 0.85rem; margin-top: 4px; color: var(--warning);">
+            回退使用 PBKDF2 (${CONFIG.PBKDF2_ITERATIONS.toLocaleString()} 次迭代)
+          </div>
+        `;
+        elements.kdfStatus.className = 'status warning';
+      }
+    }
+
+    // 检测sodium是否可用
+    async function detectSodium() {
+      if (window.sodium) {
+        sodium = window.sodium;
+        try {
+          await sodium.ready;
+          sodiumReady = true;
+        } catch (e) {
+          sodiumReady = false;
+        }
+      }
       updateKdfStatus();
     }
-  }
 
-  function updateKdfStatus(){
-    if (sodiumReady) {
-      kdfStatus.innerHTML = 'Argon2id available via libsodium (' + (argonPreset.value||'MODERATE') + ')';
-      kdfStatus.className = 'status ok';
-    } else {
-      kdfStatus.innerHTML = 'Argon2 not available — 回退使用 PBKDF2';
-      kdfStatus.className = 'status';
-    }
-  }
-
-  // Load libsodium from CDN (optional). For production/offline, bundle locally instead.
-  loadSodiumBtn.addEventListener('click', () => {
-    loadSodiumBtn.disabled = true;
-    loadSodiumBtn.textContent = '加载中…（CDN）';
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.9/dist/modules/libsodium-wrappers.js';
-    script.onload = () => {
-      detectSodium();
-      loadSodiumBtn.textContent = '已加载 libsodium';
-      loadSodiumBtn.disabled = false;
-    };
-    script.onerror = () => {
-      alert('加载 libsodium 失败（请检查网络或改为本地打包）');
-      loadSodiumBtn.textContent = '加载 libsodium';
-      loadSodiumBtn.disabled = false;
-    };
-    document.head.appendChild(script);
-  });
-
-  // deriveKey: if sodiumReady, use Argon2id (crypto_pwhash). Otherwise PBKDF2.
-  async function deriveKey(password, saltUint8, presetName = 'MODERATE') {
-    if (sodiumReady && sodium) {
-      // Map presetName to libsodium constants
-      const preset = presetName || 'MODERATE';
-      let OPSLIMIT, MEMLIMIT;
-      if (preset === 'INTERACTIVE') {
-        OPSLIMIT = sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE;
-        MEMLIMIT = sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE;
-      } else if (preset === 'SENSITIVE') {
-        OPSLIMIT = sodium.crypto_pwhash_OPSLIMIT_SENSITIVE;
-        MEMLIMIT = sodium.crypto_pwhash_MEMLIMIT_SENSITIVE;
+    // 密钥派生函数
+    async function deriveKey(password, salt, preset = CONFIG.DEFAULT_PRESET) {
+      if (sodiumReady && sodium) {
+        // 使用Argon2id
+        let opsLimit, memLimit;
+        
+        if (preset === 'CUSTOM') {
+          opsLimit = Math.pow(2, parseInt(elements.opsLimit.value));
+          memLimit = parseInt(elements.memLimit.value) * 1024 * 1024;
+        } else if (preset === 'INTERACTIVE') {
+          opsLimit = sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE;
+          memLimit = sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE;
+        } else if (preset === 'SENSITIVE') {
+          opsLimit = sodium.crypto_pwhash_OPSLIMIT_SENSITIVE;
+          memLimit = sodium.crypto_pwhash_MEMLIMIT_SENSITIVE;
+        } else {
+          opsLimit = sodium.crypto_pwhash_OPSLIMIT_MODERATE;
+          memLimit = sodium.crypto_pwhash_MEMLIMIT_MODERATE;
+        }
+        
+        const saltBytes = salt instanceof Uint8Array ? salt : new Uint8Array(salt);
+        const keyBytes = sodium.crypto_pwhash(
+          32, // 密钥长度 (32字节 = 256位)
+          password,
+          saltBytes,
+          opsLimit,
+          memLimit,
+          sodium.crypto_pwhash_ALG_ARGON2ID13
+        );
+        
+        const keyBuffer = sodium.to_array_buffer(keyBytes);
+        return crypto.subtle.importKey(
+          'raw',
+          keyBuffer,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['encrypt', 'decrypt']
+        );
       } else {
-        OPSLIMIT = sodium.crypto_pwhash_OPSLIMIT_MODERATE;
-        MEMLIMIT = sodium.crypto_pwhash_MEMLIMIT_MODERATE;
+        // 回退到PBKDF2
+        const passwordKey = await crypto.subtle.importKey(
+          'raw',
+          utils.encoder.encode(password),
+          { name: 'PBKDF2' },
+          false,
+          ['deriveKey']
+        );
+        
+        return crypto.subtle.deriveKey(
+          {
+            name: 'PBKDF2',
+            salt: salt.buffer || salt,
+            iterations: CONFIG.PBKDF2_ITERATIONS,
+            hash: 'SHA-256'
+          },
+          passwordKey,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['encrypt', 'decrypt']
+        );
       }
-
-      // password can be string
-      // ensure saltUint8 is Uint8Array and salt length equals SALTBYTES (libsodium default)
-      const salt = saltUint8 instanceof Uint8Array ? saltUint8 : new Uint8Array(saltUint8);
-      // derive 32 bytes (AES-256)
-      // Note: sodium.crypto_pwhash may require password as Uint8Array; it accepts string too.
-      const keyBytes = sodium.crypto_pwhash(
-        32,
-        password,
-        salt,
-        OPSLIMIT,
-        MEMLIMIT,
-        sodium.crypto_pwhash_ALG_ARGON2ID13
-      );
-      const keyBuf = sodium.to_array_buffer(keyBytes);
-      return crypto.subtle.importKey('raw', keyBuf, { name: 'AES-GCM', length: 256 }, false, ['encrypt','decrypt']);
-    } else {
-      // PBKDF2 fallback (compatible with previous implementation)
-      const passKey = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(password),
-        { name: 'PBKDF2' },
-        false,
-        ['deriveKey']
-      );
-      return crypto.subtle.deriveKey(
-        {
-          name: 'PBKDF2',
-          salt: saltUint8.buffer ? saltUint8.buffer : saltUint8,
-          iterations: PBKDF2_ITERATIONS,
-          hash: 'SHA-256'
-        },
-        passKey,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt','decrypt']
-      );
     }
-  }
 
-  // encrypt/decrypt
-  async function encryptText(plaintext, password) {
-    // salt length: use libsodium salt length if sodiumReady, else 16 bytes
-    const saltLen = sodiumReady && sodium ? sodium.crypto_pwhash_SALTBYTES : 16;
-    const salt = randBytes(saltLen);
-    const iv = randBytes(12);
-    const preset = argonPreset.value;
-    const key = await deriveKey(password, salt, preset);
-    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(plaintext));
-    const payload = { v:1, kdf: sodiumReady ? 'argon2id' : 'pbkdf2', preset: sodiumReady ? preset : undefined, salt: bufToBase64(salt), iv: bufToBase64(iv), ct: bufToBase64(ct) };
-    return btoa(JSON.stringify(payload));
-  }
+    // 加密文本
+    async function encryptText(plaintext, password) {
+      const startTime = performance.now();
+      
+      // 生成随机盐和IV
+      const saltLength = sodiumReady ? CONFIG.SALT_LENGTHS.ARGON2 : CONFIG.SALT_LENGTHS.PBKDF2;
+      const salt = utils.randomBytes(saltLength);
+      const iv = utils.randomBytes(12); // AES-GCM推荐12字节IV
+      
+      // 派生密钥
+      const preset = elements.argonPreset.value;
+      const key = await deriveKey(password, salt, preset);
+      
+      // 加密文本
+      const ciphertext = await crypto.subtle.encrypt(
+        {
+          name: 'AES-GCM',
+          iv: iv
+        },
+        key,
+        utils.encoder.encode(plaintext)
+      );
+      
+      // 构建输出对象
+      const payload = {
+        version: 2,
+        timestamp: new Date().toISOString(),
+        algorithm: 'AES-GCM-256',
+        kdf: sodiumReady ? 'argon2id' : 'pbkdf2',
+        preset: sodiumReady ? preset : undefined,
+        salt: utils.arrayBufferToBase64(salt),
+        iv: utils.arrayBufferToBase64(iv),
+        ciphertext: utils.arrayBufferToBase64(ciphertext)
+      };
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      
+      return {
+        payload: btoa(JSON.stringify(payload)),
+        duration: duration
+      };
+    }
 
-  async function decryptText(b64payload, password) {
-    let json;
-    try { json = JSON.parse(atob(b64payload)); } catch (e) { throw new Error('密文格式错误（无法解析）'); }
-    if (!json.salt || !json.iv || !json.ct) throw new Error('缺少字段');
-    const saltBuf = base64ToArrayBuffer(json.salt);
-    const salt = new Uint8Array(saltBuf);
-    const iv = new Uint8Array(base64ToArrayBuffer(json.iv));
-    const ct = base64ToArrayBuffer(json.ct);
-    const preset = json.preset || argonPreset.value;
-    // If payload indicated it used argon2 but sodium not available, we still try deriveKey which will fallback to PBKDF2 (but decryption will fail)
-    const key = await deriveKey(password, salt, preset);
-    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-    return decoder.decode(plainBuf);
-  }
+    // 解密文本
+    async function decryptText(encryptedData, password) {
+      const startTime = performance.now();
+      
+      // 解析加密数据
+      let payload;
+      try {
+        payload = JSON.parse(atob(encryptedData));
+      } catch (e) {
+        throw new Error('密文格式错误：无法解析Base64 JSON');
+      }
+      
+      // 验证必要字段
+      if (!payload.salt || !payload.iv || !payload.ciphertext) {
+        throw new Error('密文缺少必要字段');
+      }
+      
+      // 解码Base64数据
+      const salt = new Uint8Array(utils.base64ToArrayBuffer(payload.salt));
+      const iv = new Uint8Array(utils.base64ToArrayBuffer(payload.iv));
+      const ciphertext = utils.base64ToArrayBuffer(payload.ciphertext);
+      
+      // 派生密钥
+      const preset = payload.preset || elements.argonPreset.value;
+      const key = await deriveKey(password, salt, preset);
+      
+      // 解密文本
+      const plaintextBuffer = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: iv
+        },
+        key,
+        ciphertext
+      );
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      
+      return {
+        text: utils.decoder.decode(plaintextBuffer),
+        duration: duration,
+        metadata: payload
+      };
+    }
 
-  // UI handlers
-  encryptBtn.addEventListener('click', async () => {
-    try {
-      const text = plaintextEl.value;
-      const password = passwordEl.value || passwordVisibleEl.value;
-      if (!text) return alert('请输入要加密的文本');
-      if (!password) return alert('请输入口令');
-      encryptBtn.disabled = true;
-      outputEl.value = await encryptText(text, password);
-    } catch (e) {
-      console.error(e);
-      alert('加密失败：' + (e.message || e));
-    } finally { encryptBtn.disabled = false; }
-  });
+    // 安全检查
+    async function runSecurityCheck() {
+      const results = [];
+      
+      // 检查1: Web Crypto API
+      try {
+        const subtle = crypto.subtle;
+        if (subtle) {
+          results.push({
+            name: 'Web Crypto API',
+            status: 'ok',
+            message: '支持现代加密API'
+          });
+        } else {
+          results.push({
+            name: 'Web Crypto API',
+            status: 'error',
+            message: '浏览器不支持Web Crypto API，无法使用加密功能'
+          });
+        }
+      } catch (e) {
+        results.push({
+          name: 'Web Crypto API',
+          status: 'error',
+          message: '检查Web Crypto API时出错'
+        });
+      }
+      
+      // 检查2: libsodium状态
+      if (sodiumReady) {
+        results.push({
+          name: 'Argon2 (libsodium)',
+          status: 'ok',
+          message: '已加载，支持Argon2id算法'
+        });
+      } else {
+        results.push({
+          name: 'Argon2 (libsodium)',
+          status: 'warning',
+          message: '未加载，将使用PBKDF2回退方案'
+        });
+      }
+      
+      // 检查3: 安全上下文
+      if (window.isSecureContext) {
+        results.push({
+          name: '安全上下文',
+          status: 'ok',
+          message: '运行在安全上下文中 (HTTPS或localhost)'
+        });
+      } else {
+        results.push({
+          name: '安全上下文',
+          status: 'warning',
+          message: '未运行在安全上下文中，某些功能可能受限'
+        });
+      }
+      
+      // 检查4: 剪贴板API
+      try {
+        if (navigator.clipboard) {
+          results.push({
+            name: '剪贴板API',
+            status: 'ok',
+            message: '支持剪贴板读写'
+          });
+        } else {
+          results.push({
+            name: '剪贴板API',
+            status: 'warning',
+            message: '剪贴板API不可用，复制功能受限'
+          });
+        }
+      } catch (e) {
+        results.push({
+          name: '剪贴板API',
+          status: 'warning',
+          message: '剪贴板API检查失败'
+        });
+      }
+      
+      // 显示结果
+      displaySecurityResults(results);
+    }
 
-  decryptBtn.addEventListener('click', async () => {
-    try {
-      const data = outputEl.value;
-      const password = passwordEl.value || passwordVisibleEl.value;
-      if (!data) return alert('请输入密文到输出框');
-      if (!password) return alert('请输入口令');
-      decryptBtn.disabled = true;
-      plaintextEl.value = await decryptText(data, password);
-    } catch (e) {
-      console.error(e);
-      alert('解密失败：' + (e.message || e));
-    } finally { decryptBtn.disabled = false; }
-  });
+    function displaySecurityResults(results) {
+      const container = elements.securityCheckResults;
+      container.innerHTML = '';
+      
+      results.forEach(result => {
+        const resultEl = document.createElement('div');
+        resultEl.className = `status ${result.status}`;
+        resultEl.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <strong>${result.name}</strong>
+            <span style="margin-left: auto; font-weight: bold;">
+              ${result.status === 'ok' ? '✅' : result.status === 'warning' ? '⚠️' : '❌'}
+            </span>
+          </div>
+          <div style="margin-top: 4px; font-size: 0.9rem;">${result.message}</div>
+        `;
+        container.appendChild(resultEl);
+      });
+    }
 
-  copyBtn.addEventListener('click', async () => {
-    if (!outputEl.value) return alert('没有输出可以复制');
-    await navigator.clipboard.writeText(outputEl.value);
-    alert('已复制到剪贴板');
-  });
+    // 事件监听器
+    function setupEventListeners() {
+      // 加密按钮
+      elements.encryptBtn.addEventListener('click', async () => {
+        const plaintext = elements.plaintext.value.trim();
+        const password = elements.password.value.trim();
+        
+        if (!plaintext) {
+          utils.showStatus('请输入要加密的文本', 'warning');
+          return;
+        }
+        
+        if (!password) {
+          utils.showStatus('请输入加密口令', 'warning');
+          return;
+        }
+        
+        try {
+          elements.encryptBtn.disabled = true;
+          elements.encryptBtn.innerHTML = '<span class="loading"></span> 加密中...';
+          
+          const { payload, duration } = await encryptText(plaintext, password);
+          elements.output.value = payload;
+          
+          utils.showStatus(`✅ 加密完成 (${duration.toFixed(0)}ms)`, 'ok');
+        } catch (error) {
+          console.error('加密失败:', error);
+          utils.showStatus(`加密失败: ${error.message}`, 'error');
+        } finally {
+          elements.encryptBtn.disabled = false;
+          elements.encryptBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+            加密文本
+          `;
+        }
+      });
+      
+      // 解密按钮
+      elements.decryptBtn.addEventListener('click', async () => {
+        const encryptedData = elements.output.value.trim();
+        const password = elements.password.value.trim();
+        
+        if (!encryptedData) {
+          utils.showStatus('请输入要解密的密文', 'warning');
+          return;
+        }
+        
+        if (!password) {
+          utils.showStatus('请输入解密口令', 'warning');
+          return;
+        }
+        
+        try {
+          elements.decryptBtn.disabled = true;
+          elements.decryptBtn.innerHTML = '<span class="loading"></span> 解密中...';
+          
+          const { text, duration, metadata } = await decryptText(encryptedData, password);
+          elements.plaintext.value = text;
+          
+          let message = `✅ 解密完成 (${duration.toFixed(0)}ms)`;
+          if (metadata.kdf) {
+            message += `，使用 ${metadata.kdf.toUpperCase()}`;
+          }
+          
+          utils.showStatus(message, 'ok');
+        } catch (error) {
+          console.error('解密失败:', error);
+          utils.showStatus(`解密失败: ${error.message}`, 'error');
+        } finally {
+          elements.decryptBtn.disabled = false;
+          elements.decryptBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+            </svg>
+            解密文本
+          `;
+        }
+      });
+      
+      // 生成随机口令
+      elements.genBtn.addEventListener('click', () => {
+        const length = 20;
+        const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}<>?,.;:';
+        const randomValues = new Uint8Array(length);
+        crypto.getRandomValues(randomValues);
+        
+        let password = '';
+        for (let i = 0; i < length; i++) {
+          password += charset[randomValues[i] % charset.length];
+        }
+        
+        elements.password.value = password;
+        updatePasswordStrength();
+        utils.showStatus('✅ 已生成随机口令', 'ok');
+      });
+      
+      // 复制口令
+      elements.copyPassBtn.addEventListener('click', async () => {
+        const password = elements.password.value;
+        if (!password) {
+          utils.showStatus('没有口令可复制', 'warning');
+          return;
+        }
+        
+        try {
+          await navigator.clipboard.writeText(password);
+          utils.showStatus('✅ 口令已复制到剪贴板', 'ok');
+        } catch (error) {
+          utils.showStatus(`复制失败: ${error.message}`, 'error');
+        }
+      });
+      
+      // 复制输出
+      elements.copyBtn.addEventListener('click', async () => {
+        const output = elements.output.value;
+        if (!output) {
+          utils.showStatus('没有输出可复制', 'warning');
+          return;
+        }
+        
+        try {
+          await navigator.clipboard.writeText(output);
+          utils.showStatus('✅ 输出已复制到剪贴板', 'ok');
+        } catch (error) {
+          utils.showStatus(`复制失败: ${error.message}`, 'error');
+        }
+      });
+      
+      // 下载输出
+      elements.downloadBtn.addEventListener('click', () => {
+        const output = elements.output.value;
+        if (!output) {
+          utils.showStatus('没有输出可下载', 'warning');
+          return;
+        }
+        
+        try {
+          const blob = new Blob([output], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `encrypted_${Date.now()}.txt`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          utils.showStatus('✅ 输出已下载', 'ok');
+        } catch (error) {
+          utils.showStatus(`下载失败: ${error.message}`, 'error');
+        }
+      });
+      
+      // 清空文本
+      elements.clearTextBtn.addEventListener('click', () => {
+        elements.plaintext.value = '';
+        utils.showStatus('已清空输入文本', 'info');
+      });
+      
+      // 清空输出
+      elements.clearOutputBtn.addEventListener('click', () => {
+        elements.output.value = '';
+        utils.showStatus('已清空输出', 'info');
+      });
+      
+      // 示例文本
+      elements.sampleTextBtn.addEventListener('click', () => {
+        const sampleText = `这是一个加密示例文本。
 
-  genBtn.addEventListener('click', () => {
-    const len = 20;
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}<>?,.';
-    const rnd = new Uint8Array(len);
-    crypto.getRandomValues(rnd);
-    let s = '';
-    for (let i=0;i<len;i++) s += chars[rnd[i] % chars.length];
-    passwordVisibleEl.value = s;
-    passwordEl.value = s;
-  });
+使用说明：
+1. 输入一个强口令（建议12位以上）
+2. 点击"加密文本"按钮
+3. 将生成的密文发送给接收方
+4. 通过另一渠道告知口令
 
-  copyPassBtn.addEventListener('click', async () => {
-    const p = passwordVisibleEl.value;
-    if (!p) return alert('没有口令可以复制');
-    await navigator.clipboard.writeText(p);
-    alert('口令已复制到剪贴板');
-  });
+安全提示：
+- 不要在不安全的网络上传输敏感信息
+- 定期更换加密口令
+- 验证文件完整性后再使用`;
 
-  downloadBtn.addEventListener('click', () => {
-    const text = outputEl.value;
-    if (!text) return alert('没有密文可以下载');
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'ciphertext.txt';
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  });
+        elements.plaintext.value = sampleText;
+        utils.showStatus('已加载示例文本', 'info');
+      });
+      
+      // 切换口令可见性
+      elements.togglePassword.addEventListener('click', () => {
+        isPasswordVisible = !isPasswordVisible;
+        elements.password.type = isPasswordVisible ? 'text' : 'password';
+        
+        elements.togglePassword.innerHTML = isPasswordVisible ? 
+          `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L6.59 6.59m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+          </svg>` :
+          `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+          </svg>`;
+      });
+      
+      // 更新口令强度
+      elements.password.addEventListener('input', updatePasswordStrength);
+      
+      // 加载libsodium
+      elements.loadSodiumBtn.addEventListener('click', utils.loadLibsodium);
+      
+      // 安全检查
+      elements.securityCheckBtn.addEventListener('click', () => {
+        elements.securityModal.style.display = 'flex';
+        runSecurityCheck();
+      });
+      
+      elements.closeSecurityModal.addEventListener('click', () => {
+        elements.securityModal.style.display = 'none';
+      });
+      
+      elements.runSecurityCheck.addEventListener('click', runSecurityCheck);
+      
+      // 输出操作
+      elements.formatOutputBtn.addEventListener('click', () => {
+        const output = elements.output.value;
+        if (!output) {
+          utils.showStatus('没有输出可格式化', 'warning');
+          return;
+        }
+        
+        try {
+          const formatted = utils.formatJSON(output);
+          elements.output.value = formatted;
+          utils.showStatus('✅ 输出已格式化', 'ok');
+        } catch (error) {
+          utils.showStatus('格式化失败: 无效的JSON格式', 'error');
+        }
+      });
+      
+      elements.minifyOutputBtn.addEventListener('click', () => {
+        const output = elements.output.value;
+        if (!output) {
+          utils.showStatus('没有输出可压缩', 'warning');
+          return;
+        }
+        
+        try {
+          const minified = utils.formatJSON(output, false);
+          elements.output.value = minified;
+          utils.showStatus('✅ 输出已压缩', 'ok');
+        } catch (error) {
+          utils.showStatus('压缩失败: 无效的JSON格式', 'error');
+        }
+      });
+      
+      elements.viewOutputBtn.addEventListener('click', () => {
+        const output = elements.output.value;
+        if (!output) {
+          utils.showStatus('没有输出可查看', 'warning');
+          return;
+        }
+        
+        try {
+          const parsed = JSON.parse(atob(output));
+          elements.outputDetails.textContent = utils.formatJSON(parsed);
+          elements.outputModal.style.display = 'flex';
+        } catch (error) {
+          utils.showStatus('查看详情失败: 无效的加密数据', 'error');
+        }
+      });
+      
+      elements.closeOutputModal.addEventListener('click', () => {
+        elements.outputModal.style.display = 'none';
+      });
+      
+      // 预设选择
+      elements.argonPreset.addEventListener('change', function() {
+        if (this.value === 'CUSTOM') {
+          elements.customParams.style.display = 'block';
+        } else {
+          elements.customParams.style.display = 'none';
+        }
+        updateKdfStatus();
+      });
+      
+      // 自定义参数
+      elements.memLimit.addEventListener('input', function() {
+        elements.memValue.textContent = `${this.value} MB`;
+      });
+      
+      elements.opsLimit.addEventListener('input', function() {
+        const values = ['很低', '低', '较低', '中低', '中等', '中高', '高', '很高', '极高', '最强'];
+        elements.opsValue.textContent = `${values[this.value - 2] || '中等'} (${this.value})`;
+      });
+      
+      // 点击模态框外部关闭
+      window.addEventListener('click', (event) => {
+        if (event.target === elements.securityModal) {
+          elements.securityModal.style.display = 'none';
+        }
+        if (event.target === elements.outputModal) {
+          elements.outputModal.style.display = 'none';
+        }
+      });
+      
+      // 键盘快捷键
+      document.addEventListener('keydown', (event) => {
+        // Ctrl+Enter: 加密
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          if (elements.plaintext.value && elements.password.value) {
+            event.preventDefault();
+            elements.encryptBtn.click();
+          }
+        }
+        
+        // Ctrl+E: 加密
+        if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+          event.preventDefault();
+          elements.encryptBtn.click();
+        }
+        
+        // Ctrl+D: 解密
+        if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
+          event.preventDefault();
+          elements.decryptBtn.click();
+        }
+        
+        // Ctrl+G: 生成口令
+        if ((event.ctrlKey || event.metaKey) && event.key === 'g') {
+          event.preventDefault();
+          elements.genBtn.click();
+        }
+        
+        // Ctrl+Delete: 清空所有
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Delete') {
+          event.preventDefault();
+          elements.clearTextBtn.click();
+          elements.clearOutputBtn.click();
+        }
+      });
+    }
 
-  // initial detection
-  detectSodium();
-  updateKdfStatus();
+    // 更新口令强度显示
+    function updatePasswordStrength() {
+      const password = elements.password.value;
+      const strength = utils.calculatePasswordStrength(password);
+      
+      elements.strengthBar.style.width = `${strength.score}%`;
+      elements.strengthBar.style.backgroundColor = strength.color;
+      elements.strengthText.textContent = `口令强度: ${strength.text}`;
+    }
 
-  // If sodium loads later (e.g., user clicked load button), detect will update status after sodium.ready resolves.
+    // 初始化
+    async function init() {
+      console.log('文本加解密工具初始化...');
+      
+      // 检测libsodium
+      await detectSodium();
+      
+      // 设置事件监听器
+      setupEventListeners();
+      
+      // 初始化口令强度显示
+      updatePasswordStrength();
+      
+      // 显示初始化完成消息
+      utils.showStatus('工具已准备就绪，可以开始加密/解密操作', 'ok', 3000);
+      
+      // 添加CSS动画
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .loading {
+          animation: spin 1s linear infinite;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 # CryptoLock - 本地安全加密工具套件
 
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/laddzhao/CryptoLock/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/laddzhao/CryptoLock)](https://github.com/laddzhao/cryptolock/CryptoLock)
+[![GitHub stars](https://img.shields.io/github/stars/laddzhao/CryptoLock)](https://github.com/laddzhao/CryptoLock)
 [![GitHub issues](https://img.shields.io/github/issues/laddzhao/cryptolock)](https://github.com/laddzhao/CryptoLock/issues)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/laddzhao/cryptolock/pulls)
 

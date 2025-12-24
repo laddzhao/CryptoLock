@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="本地文本加解密工具，使用Argon2id和PBKDF2，支持密码哈希链功能">
+  <meta name="description" content="本地文本加解密工具，使用Argon2id和PBKDF2，支持一次性解密功能">
   <title>SecureCipher - 本地安全加密工具</title>
   <style>
     :root {
@@ -507,7 +507,7 @@
     
     <p class="description">
       默认优先用 Argon2（更安全）把你输入的口令做成加密钥匙；如果浏览器里没有这个库，页面会自动退回使用浏览器自带的 PBKDF2。
-      支持密码哈希链功能，可以限制密文的使用次数。为了最安全，建议把整套文件（含库）下载打包后离线发给朋友，并通过另一条渠道单独告知口令或校验码。
+      支持一次性解密功能（防君子模式）。为了最安全，建议把整套文件（含库）下载打包后离线发给朋友，并通过另一条渠道单独告知口令或校验码。
     </p>
     
     <section class="section">
@@ -554,7 +554,7 @@
             <p><strong>Argon2id</strong>: 内存困难密码哈希函数，抵抗侧信道攻击</p>
             <p><strong>PBKDF2</strong>: 基于SHA-256的密钥派生函数，200,000次迭代</p>
             <p><strong>AES-GCM</strong>: 认证加密算法，256位密钥</p>
-            <p><strong>密码哈希链</strong>: 限制使用次数，每次解密后自动更换密码</p>
+            <p><strong>一次性解密</strong>: 防君子模式，限制同一密文重复解密</p>
           </div>
           <div class="status info" id="algorithmInfo">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -569,34 +569,29 @@
             <svg viewBox="0 0 24 24">
               <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
             </svg>
-            密码链设置（可选）
+            一次性解密设置（可选）
           </div>
           
           <div class="row" style="align-items: center; margin-bottom: 12px;">
-            <input type="checkbox" id="enableChain" style="width: auto; margin: 0;">
-            <label for="enableChain" style="display: inline; margin: 0; margin-left: 8px;">启用密码哈希链</label>
+            <input type="checkbox" id="enableOneTime" style="width: auto; margin: 0;">
+            <label for="enableOneTime" style="display: inline; margin: 0; margin-left: 8px;">启用一次性解密（防君子模式）</label>
           </div>
           
-          <div id="chainSettings" style="display: none;">
-            <label for="chainLength">链长度（最大使用次数）</label>
-            <input type="range" id="chainLength" min="2" max="50" step="1" value="5">
-            <div class="preset-option">
-              <span>长度：</span><span id="chainLengthValue">5 次</span>
-            </div>
-            
-            <label for="currentChainIndex" style="margin-top: 12px;">当前链索引</label>
-            <div class="row" style="margin-top: 4px;">
-              <input type="number" id="currentChainIndex" min="0" max="49" value="0" style="flex: 1;">
-              <button id="resetChainBtn" class="secondary" style="width: auto; padding: 8px 12px;">重置</button>
-            </div>
-            
+          <div id="oneTimeSettings" style="display: none;">
             <div class="kdf-info" style="margin-top: 12px;">
-              <p><strong>密码链工作原理：</strong></p>
+              <p><strong>⚠️ 注意：</strong>此功能并非绝对安全！</p>
               <ul style="padding-left: 20px; margin-top: 4px; font-size: 0.9rem;">
-                <li>每次解密后自动更换密码</li>
-                <li>加密时记录当前链位置</li>
-                <li>超出链长度后无法再解密</li>
+                <li>在同一浏览器环境中，同一密文只能解密一次</li>
+                <li>解密记录保存在本地，清除浏览器数据可重置</li>
+                <li>不同浏览器或隐私窗口状态不共享</li>
+                <li>适用于非对抗环境，不能依赖其进行强制限制</li>
               </ul>
+            </div>
+            
+            <div class="row" style="margin-top: 12px;">
+              <button id="clearRecordsBtn" class="secondary" style="width: auto; padding: 8px 12px;">
+                清除解密记录
+              </button>
             </div>
           </div>
         </div>
@@ -703,20 +698,6 @@
           下载密文
         </button>
         
-        <button id="manageChainBtn" class="secondary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-          </svg>
-          管理密码链
-        </button>
-        
-        <button id="exportChainBtn" class="secondary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
-          导出密码链
-        </button>
-        
         <a href="verify.html" style="text-decoration: none;">
           <button class="warning">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -769,8 +750,7 @@
       <h3>安全使用建议</h3>
       <ul>
         <li>🔒 若要离线使用，请把本页连同 libsodium 库打包发给朋友并让朋友在本地打开 verify.html 校验哈希再使用。</li>
-        <li>⛓️ 启用"密码链"功能可以限制密文使用次数，每次解密后会自动更换密码</li>
-        <li>🔢 密码链非常适合分享敏感文件，可以控制对方只能解密有限次数</li>
+        <li>⚠️ 一次性解密功能仅为"防君子"模式，技术上可绕过，不适用于对抗环境</li>
         <li>⚡ 若页面短暂卡顿（Argon2 计算期间），属于正常，说明派生较强。可选择 preset 降低强度。</li>
         <li>🔑 建议口令长度至少12个字符，包含大小写字母、数字和特殊字符。</li>
         <li>📱 通过不同渠道传输密文和口令（例如：密文通过聊天软件发送，口令通过电话告知）。</li>
@@ -804,60 +784,17 @@
     </div>
   </div>
 
-  <!-- 密码链管理模态框 -->
-  <div id="chainModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title">密码链管理</h2>
-        <button class="close-modal" id="closeChainModal">&times;</button>
-      </div>
-      
-      <div id="chainDetails" style="max-height: 400px; overflow-y: auto;">
-        <!-- 密码链详情将在这里显示 -->
-      </div>
-      
-      <div class="row" style="margin-top: 20px; justify-content: flex-end;">
-        <button id="copyChainBtn" class="secondary">复制密码链</button>
-        <button id="importChainBtn" class="secondary">导入密码链</button>
-        <button id="closeChainBtn" class="secondary">关闭</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 密码链导入模态框 -->
-  <div id="importChainModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title">导入密码链</h2>
-        <button class="close-modal" id="closeImportChainModal">&times;</button>
-      </div>
-      
-      <label for="importChainData">粘贴密码链数据（JSON格式）</label>
-      <textarea id="importChainData" rows="10" placeholder='{"baseHash": "...", "chainLength": 5, "currentIndex": 0}'></textarea>
-      
-      <div class="row" style="margin-top: 20px; justify-content: flex-end;">
-        <button id="cancelImportChainBtn" class="secondary">取消</button>
-        <button id="confirmImportChainBtn">导入</button>
-      </div>
-    </div>
-  </div>
-
   <script>
     // 配置
     const CONFIG = {
       PBKDF2_ITERATIONS: 200000,
       DEFAULT_PRESET: 'MODERATE',
       SALT_LENGTHS: {
-        ARGON2: 16,  // libsodium默认盐长度
+        ARGON2: 16,
         PBKDF2: 16
       },
-      // 新增：密码链配置
-      PASSWORD_CHAIN: {
-        DEFAULT_LENGTH: 5,
-        MAX_LENGTH: 50,
-        STORAGE_KEY: 'securecipher_password_chain',
-        VERSION: 1
-      }
+      // 简化：一次性解密配置
+      ONE_TIME_STORAGE_KEY: 'securecipher_one_time_ids'
     };
 
     // DOM元素
@@ -876,26 +813,10 @@
       opsLimit: $('opsLimit'),
       opsValue: $('opsValue'),
       
-      // 密码链
-      enableChain: $('enableChain'),
-      chainSettings: $('chainSettings'),
-      chainLength: $('chainLength'),
-      chainLengthValue: $('chainLengthValue'),
-      currentChainIndex: $('currentChainIndex'),
-      resetChainBtn: $('resetChainBtn'),
-      manageChainBtn: $('manageChainBtn'),
-      exportChainBtn: $('exportChainBtn'),
-      chainModal: $('chainModal'),
-      closeChainModal: $('closeChainModal'),
-      chainDetails: $('chainDetails'),
-      copyChainBtn: $('copyChainBtn'),
-      importChainBtn: $('importChainBtn'),
-      closeChainBtn: $('closeChainBtn'),
-      importChainModal: $('importChainModal'),
-      closeImportChainModal: $('closeImportChainModal'),
-      importChainData: $('importChainData'),
-      cancelImportChainBtn: $('cancelImportChainBtn'),
-      confirmImportChainBtn: $('confirmImportChainBtn'),
+      // 一次性解密
+      enableOneTime: $('enableOneTime'),
+      oneTimeSettings: $('oneTimeSettings'),
+      clearRecordsBtn: $('clearRecordsBtn'),
       
       // 输出
       output: $('output'),
@@ -942,193 +863,6 @@
     let sodium = null;
     let isPasswordVisible = false;
 
-    // 密码链管理器
-    class PasswordChainManager {
-      constructor() {
-        this.chain = null;
-        this.loadFromStorage();
-      }
-      
-      // 从密码生成哈希链
-      async generateChain(basePassword, length = CONFIG.PASSWORD_CHAIN.DEFAULT_LENGTH) {
-        console.log(`生成密码哈希链（长度：${length}）...`);
-        
-        const chain = [];
-        let currentHash = basePassword;
-        
-        // 第一个元素是原始密码的哈希（用于验证）
-        chain.push({
-          index: 0,
-          hash: await this.hashPassword(basePassword),
-          isUsed: false
-        });
-        
-        // 生成链上的每个密码
-        for (let i = 1; i <= length; i++) {
-          // 使用 SHA-256 生成下一个哈希
-          const encoder = new TextEncoder();
-          const data = encoder.encode(currentHash + i.toString());
-          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-          
-          // 转换为 Base64 作为密码
-          const hashArray = new Uint8Array(hashBuffer);
-          currentHash = utils.arrayBufferToBase64(hashArray).substring(0, 32);
-          
-          chain.push({
-            index: i,
-            hash: currentHash,
-            isUsed: false
-          });
-        }
-        
-        this.chain = {
-          version: CONFIG.PASSWORD_CHAIN.VERSION,
-          baseHash: await this.hashPassword(basePassword),
-          chain: chain,
-          length: length,
-          currentIndex: 0,
-          createdAt: new Date().toISOString()
-        };
-        
-        this.saveToStorage();
-        return this.chain;
-      }
-      
-      // 哈希密码（用于验证）
-      async hashPassword(password) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(password);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        return utils.arrayBufferToBase64(hashBuffer);
-      }
-      
-      // 检查密码是否匹配
-      async verifyPassword(password) {
-        if (!this.chain) return false;
-        const passwordHash = await this.hashPassword(password);
-        return passwordHash === this.chain.baseHash;
-      }
-      
-      // 获取当前密码
-      getCurrentPassword() {
-        if (!this.chain || !this.chain.chain[this.chain.currentIndex]) {
-          return null;
-        }
-        return this.chain.chain[this.chain.currentIndex].hash;
-      }
-      
-      // 前进到下一个密码
-      advance() {
-        if (!this.chain) return false;
-        
-        // 标记当前密码为已使用
-        if (this.chain.currentIndex < this.chain.chain.length) {
-          this.chain.chain[this.chain.currentIndex].isUsed = true;
-        }
-        
-        // 前进索引
-        if (this.chain.currentIndex < this.chain.length) {
-          this.chain.currentIndex++;
-          this.saveToStorage();
-          return true;
-        }
-        
-        return false;
-      }
-      
-      // 重置密码链
-      reset() {
-        if (!this.chain) return;
-        
-        this.chain.currentIndex = 0;
-        this.chain.chain.forEach(item => item.isUsed = false);
-        this.chain.createdAt = new Date().toISOString();
-        
-        this.saveToStorage();
-      }
-      
-      // 导出密码链
-      export() {
-        if (!this.chain) return null;
-        
-        return {
-          version: this.chain.version,
-          baseHash: this.chain.baseHash,
-          chainLength: this.chain.length,
-          currentIndex: this.chain.currentIndex,
-          remainingUses: this.chain.length - this.chain.currentIndex,
-          createdAt: this.chain.createdAt,
-          nextPasswords: this.chain.chain
-            .slice(this.chain.currentIndex, Math.min(this.chain.currentIndex + 5, this.chain.chain.length))
-            .map(item => ({
-              index: item.index,
-              hashPreview: item.hash.substring(0, 8) + '...' + item.hash.substring(item.hash.length - 8)
-            }))
-        };
-      }
-      
-      // 导入密码链
-      import(chainData) {
-        // 简单验证
-        if (!chainData.version || !chainData.baseHash || !chainData.chainLength) {
-          throw new Error('无效的密码链数据');
-        }
-        
-        // 重建链
-        this.chain = {
-          version: chainData.version,
-          baseHash: chainData.baseHash,
-          chain: [], // 实际使用时重新生成
-          length: chainData.chainLength,
-          currentIndex: chainData.currentIndex || 0,
-          createdAt: chainData.createdAt || new Date().toISOString()
-        };
-        
-        this.saveToStorage();
-        return this.chain;
-      }
-      
-      // 保存到本地存储
-      saveToStorage() {
-        if (!this.chain) return;
-        
-        try {
-          localStorage.setItem(
-            CONFIG.PASSWORD_CHAIN.STORAGE_KEY,
-            JSON.stringify(this.chain)
-          );
-        } catch (e) {
-          console.warn('无法保存密码链到本地存储:', e);
-        }
-      }
-      
-      // 从本地存储加载
-      loadFromStorage() {
-        try {
-          const saved = localStorage.getItem(CONFIG.PASSWORD_CHAIN.STORAGE_KEY);
-          if (saved) {
-            this.chain = JSON.parse(saved);
-            console.log('已加载密码链，当前索引:', this.chain.currentIndex);
-          }
-        } catch (e) {
-          console.warn('无法从本地存储加载密码链:', e);
-        }
-      }
-      
-      // 清除密码链
-      clear() {
-        this.chain = null;
-        try {
-          localStorage.removeItem(CONFIG.PASSWORD_CHAIN.STORAGE_KEY);
-        } catch (e) {
-          console.warn('无法清除本地存储中的密码链:', e);
-        }
-      }
-    }
-
-    // 创建密码链管理器实例
-    const passwordChainManager = new PasswordChainManager();
-
     // 工具函数
     const utils = {
       encoder: new TextEncoder(),
@@ -1145,7 +879,7 @@
       arrayBufferToBase64(buffer) {
         const bytes = new Uint8Array(buffer);
         let binary = '';
-        const chunkSize = 0x8000; // 32KB chunks
+        const chunkSize = 0x8000;
         
         for (let i = 0; i < bytes.length; i += chunkSize) {
           binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
@@ -1183,38 +917,34 @@
         let score = 0;
         const length = password.length;
         
-        // 长度评分
         if (length >= 8) score += 1;
         if (length >= 12) score += 1;
         if (length >= 16) score += 1;
         
-        // 字符类型评分
-        if (/[a-z]/.test(password)) score += 1; // 小写字母
-        if (/[A-Z]/.test(password)) score += 1; // 大写字母
-        if (/[0-9]/.test(password)) score += 1; // 数字
-        if (/[^a-zA-Z0-9]/.test(password)) score += 1; // 特殊字符
+        if (/[a-z]/.test(password)) score += 1;
+        if (/[A-Z]/.test(password)) score += 1;
+        if (/[0-9]/.test(password)) score += 1;
+        if (/[^a-zA-Z0-9]/.test(password)) score += 1;
         
-        // 多样性评分
         const uniqueChars = new Set(password).size;
         if (uniqueChars / length > 0.7) score += 1;
         
-        // 映射到0-100的分数和文本描述
         const maxScore = 8;
         const percentage = Math.min(100, Math.round((score / maxScore) * 100));
         
         let text, color;
         if (percentage < 30) {
           text = '弱';
-          color = '#dc2626'; // 红色
+          color = '#dc2626';
         } else if (percentage < 60) {
           text = '一般';
-          color = '#f59e0b'; // 黄色
+          color = '#f59e0b';
         } else if (percentage < 80) {
           text = '良好';
-          color = '#16a34a'; // 绿色
+          color = '#16a34a';
         } else {
           text = '强';
-          color = '#059669'; // 深绿色
+          color = '#059669';
         }
         
         return { 
@@ -1245,7 +975,6 @@
           elements.loadSodiumBtn.disabled = true;
           elements.loadSodiumBtn.innerHTML = '<span class="loading"></span> 加载中...';
           
-          // 尝试从CDN加载
           const script = document.createElement('script');
           script.src = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.10/dist/modules/libsodium-wrappers.min.js';
           
@@ -1255,7 +984,6 @@
             document.head.appendChild(script);
           });
           
-          // 等待sodium准备就绪
           await sodium.ready;
           sodiumReady = true;
           
@@ -1268,6 +996,41 @@
         } finally {
           elements.loadSodiumBtn.disabled = false;
           elements.loadSodiumBtn.textContent = '加载 libsodium';
+        }
+      },
+
+      // 一次性解密工具函数
+      generateOneTimeId() {
+        return utils.arrayBufferToBase64(crypto.getRandomValues(new Uint8Array(16)));
+      },
+
+      getDecryptedIds() {
+        try {
+          const stored = localStorage.getItem(CONFIG.ONE_TIME_STORAGE_KEY);
+          return stored ? JSON.parse(stored) : [];
+        } catch (e) {
+          return [];
+        }
+      },
+
+      addDecryptedId(id) {
+        const ids = utils.getDecryptedIds();
+        if (!ids.includes(id)) {
+          ids.push(id);
+          localStorage.setItem(CONFIG.ONE_TIME_STORAGE_KEY, JSON.stringify(ids));
+        }
+      },
+
+      isIdDecrypted(id) {
+        const ids = utils.getDecryptedIds();
+        return ids.includes(id);
+      },
+
+      clearDecryptedIds() {
+        try {
+          localStorage.removeItem(CONFIG.ONE_TIME_STORAGE_KEY);
+        } catch (e) {
+          console.warn('清除解密记录失败:', e);
         }
       }
     };
@@ -1294,117 +1057,16 @@
       }
     }
 
-    // 更新密码链UI显示
-    function updateChainUI() {
-      const enableChain = elements.enableChain;
-      const chainSettings = elements.chainSettings;
-      const chainLengthValue = elements.chainLengthValue;
-      const currentChainIndex = elements.currentChainIndex;
-      const exportChainBtn = elements.exportChainBtn;
+    // 更新一次性解密UI
+    function updateOneTimeUI() {
+      const isEnabled = elements.enableOneTime.checked;
+      elements.oneTimeSettings.style.display = isEnabled ? 'block' : 'none';
       
-      // 显示/隐藏设置区域
-      chainSettings.style.display = enableChain.checked ? 'block' : 'none';
-      
-      // 如果有密码链，更新显示
-      if (passwordChainManager.chain) {
-        const chain = passwordChainManager.chain;
-        chainLengthValue.textContent = `${chain.length} 次`;
-        elements.chainLength.value = chain.length;
-        currentChainIndex.value = chain.currentIndex;
-        
-        // 更新状态显示
-        const remaining = chain.length - chain.currentIndex;
-        const statusText = `密码链：索引 ${chain.currentIndex}/${chain.length}，剩余 ${remaining} 次`;
-        
-        // 在操作状态区域显示链状态
-        if (enableChain.checked) {
-          elements.operationStatus.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-            </svg>
-            ${statusText}
-          `;
-          elements.operationStatus.className = 'status info';
-          elements.operationStatus.style.display = 'flex';
-        }
-        
-        // 启用导出按钮
-        exportChainBtn.disabled = false;
-      } else {
-        // 禁用导出按钮
-        exportChainBtn.disabled = true;
+      // 显示当前解密记录数量
+      const count = utils.getDecryptedIds().length;
+      if (count > 0) {
+        utils.showStatus(`已记录 ${count} 条解密记录`, 'info', 3000);
       }
-    }
-
-    // 显示密码链详情
-    function showChainDetails() {
-      if (!passwordChainManager.chain) {
-        elements.chainDetails.innerHTML = `
-          <div class="status info">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            尚未创建密码链
-          </div>
-        `;
-        return;
-      }
-      
-      const chain = passwordChainManager.chain;
-      const chainData = passwordChainManager.export();
-      const remaining = chain.length - chain.currentIndex;
-      
-      let html = `
-        <h3>密码链状态</h3>
-        <p><strong>创建时间：</strong>${new Date(chain.createdAt).toLocaleString()}</p>
-        <p><strong>链长度：</strong>${chain.length} 次使用</p>
-        <p><strong>当前索引：</strong>${chain.currentIndex}</p>
-        <p><strong>剩余使用次数：</strong>${remaining}</p>
-        <p><strong>状态：</strong>${remaining > 0 ? '<span style="color: var(--ok);">可用</span>' : '<span style="color: var(--danger);">已用完</span>'}</p>
-        
-        <h4 style="margin-top: 16px;">密码使用历史</h4>
-        <div style="max-height: 200px; overflow-y: auto;">
-          <table style="width: 100%; font-size: 0.9rem; border-collapse: collapse;">
-            <thead>
-              <tr style="background: var(--bg);">
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid var(--border);">索引</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid var(--border);">状态</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid var(--border);">密码预览</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
-      
-      // 显示前10个密码的状态
-      const showCount = Math.min(10, chain.chain.length);
-      for (let i = 0; i < showCount; i++) {
-        const item = chain.chain[i];
-        const status = item.isUsed ? '已使用' : (i === chain.currentIndex ? '当前' : '未使用');
-        const statusColor = item.isUsed ? 'var(--muted)' : (i === chain.currentIndex ? 'var(--accent)' : 'var(--ok)');
-        
-        html += `
-          <tr style="${i === chain.currentIndex ? 'background: rgba(14, 165, 233, 0.1);' : ''}">
-            <td style="padding: 8px; border-bottom: 1px solid var(--border);">${item.index}</td>
-            <td style="padding: 8px; border-bottom: 1px solid var(--border); color: ${statusColor};">${status}</td>
-            <td style="padding: 8px; border-bottom: 1px solid var(--border); font-family: monospace; font-size: 0.8rem;">${item.hash.substring(0, 8)}...${item.hash.substring(item.hash.length - 8)}</td>
-          </tr>
-        `;
-      }
-      
-      html += `
-            </tbody>
-          </table>
-        </div>
-        
-        <div class="status info" style="margin-top: 16px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-          提示：密码链可以限制密文的使用次数，每次解密后会自动更换密码。
-        </div>
-      `;
-      
-      elements.chainDetails.innerHTML = html;
     }
 
     // 检测sodium是否可用
@@ -1424,7 +1086,6 @@
     // 密钥派生函数
     async function deriveKey(password, salt, preset = CONFIG.DEFAULT_PRESET) {
       if (sodiumReady && sodium) {
-        // 使用Argon2id
         let opsLimit, memLimit;
         
         if (preset === 'CUSTOM') {
@@ -1443,7 +1104,7 @@
         
         const saltBytes = salt instanceof Uint8Array ? salt : new Uint8Array(salt);
         const keyBytes = sodium.crypto_pwhash(
-          32, // 密钥长度 (32字节 = 256位)
+          32,
           password,
           saltBytes,
           opsLimit,
@@ -1460,7 +1121,6 @@
           ['encrypt', 'decrypt']
         );
       } else {
-        // 回退到PBKDF2
         const passwordKey = await crypto.subtle.importKey(
           'raw',
           utils.encoder.encode(password),
@@ -1488,39 +1148,22 @@
     async function encryptText(plaintext, password) {
       const startTime = performance.now();
       
-      // 检查是否启用了密码链
-      const useChain = elements.enableChain.checked;
-      let chainInfo = null;
-      let actualPassword = password;
+      // 检查是否启用一次性解密
+      const useOneTime = elements.enableOneTime.checked;
+      let oneTimeId = null;
       
-      if (useChain && passwordChainManager.chain) {
-        // 验证密码
-        const isValid = await passwordChainManager.verifyPassword(password);
-        if (!isValid) {
-          throw new Error('密码不匹配已保存的密码链');
-        }
-        
-        // 使用链上的当前密码
-        const chainPassword = passwordChainManager.getCurrentPassword();
-        if (chainPassword) {
-          actualPassword = chainPassword;
-          chainInfo = {
-            chainEnabled: true,
-            chainIndex: passwordChainManager.chain.currentIndex,
-            chainLength: passwordChainManager.chain.length,
-            baseHash: passwordChainManager.chain.baseHash.substring(0, 16) + '...'
-          };
-        }
+      if (useOneTime) {
+        oneTimeId = utils.generateOneTimeId();
       }
       
       // 生成随机盐和IV
       const saltLength = sodiumReady ? CONFIG.SALT_LENGTHS.ARGON2 : CONFIG.SALT_LENGTHS.PBKDF2;
       const salt = utils.randomBytes(saltLength);
-      const iv = utils.randomBytes(12); // AES-GCM推荐12字节IV
+      const iv = utils.randomBytes(12);
       
       // 派生密钥
       const preset = elements.argonPreset.value;
-      const key = await deriveKey(actualPassword, salt, preset);
+      const key = await deriveKey(password, salt, preset);
       
       // 加密文本
       const ciphertext = await crypto.subtle.encrypt(
@@ -1542,8 +1185,7 @@
         salt: utils.arrayBufferToBase64(salt),
         iv: utils.arrayBufferToBase64(iv),
         ciphertext: utils.arrayBufferToBase64(ciphertext),
-        // 添加密码链信息
-        chainInfo: chainInfo
+        oneTimeId: oneTimeId
       };
       
       const endTime = performance.now();
@@ -1552,7 +1194,7 @@
       return {
         payload: btoa(JSON.stringify(payload)),
         duration: duration,
-        usedChain: !!chainInfo
+        usedOneTime: !!oneTimeId
       };
     }
 
@@ -1573,45 +1215,21 @@
         throw new Error('密文缺少必要字段');
       }
       
+      // 检查一次性解密记录
+      if (payload.oneTimeId) {
+        if (utils.isIdDecrypted(payload.oneTimeId)) {
+          throw new Error('此密文已被解密过，无法再次解密（防君子模式）');
+        }
+      }
+      
       // 解码Base64数据
       const salt = new Uint8Array(utils.base64ToArrayBuffer(payload.salt));
       const iv = new Uint8Array(utils.base64ToArrayBuffer(payload.iv));
       const ciphertext = utils.base64ToArrayBuffer(payload.ciphertext);
       
-      // 检查是否有密码链信息
-      let actualPassword = password;
-      let shouldAdvanceChain = false;
-      
-      if (payload.chainInfo && payload.chainInfo.chainEnabled) {
-        // 检查是否启用了密码链
-        if (!elements.enableChain.checked) {
-          throw new Error('此密文使用密码链加密，请先启用密码链功能');
-        }
-        
-        // 验证密码
-        const isValid = await passwordChainManager.verifyPassword(password);
-        if (!isValid) {
-          throw new Error('密码不匹配此密文的密码链');
-        }
-        
-        // 检查链索引是否匹配
-        if (passwordChainManager.chain.currentIndex !== payload.chainInfo.chainIndex) {
-          throw new Error(`密码链索引不匹配。当前索引：${passwordChainManager.chain.currentIndex}，密文索引：${payload.chainInfo.chainIndex}`);
-        }
-        
-        // 使用链上的密码
-        const chainPassword = passwordChainManager.getCurrentPassword();
-        if (!chainPassword) {
-          throw new Error('无法获取密码链中的密码');
-        }
-        
-        actualPassword = chainPassword;
-        shouldAdvanceChain = true;
-      }
-      
       // 派生密钥
       const preset = payload.preset || elements.argonPreset.value;
-      const key = await deriveKey(actualPassword, salt, preset);
+      const key = await deriveKey(password, salt, preset);
       
       // 解密文本
       const plaintextBuffer = await crypto.subtle.decrypt(
@@ -1623,13 +1241,9 @@
         ciphertext
       );
       
-      // 如果解密成功且使用了密码链，则前进到下一个密码
-      if (shouldAdvanceChain) {
-        const advanced = passwordChainManager.advance();
-        if (advanced) {
-          // 更新UI显示
-          updateChainUI();
-        }
+      // 记录一次性解密
+      if (payload.oneTimeId) {
+        utils.addDecryptedId(payload.oneTimeId);
       }
       
       const endTime = performance.now();
@@ -1639,7 +1253,7 @@
         text: utils.decoder.decode(plaintextBuffer),
         duration: duration,
         metadata: payload,
-        usedChain: !!payload.chainInfo
+        usedOneTime: !!payload.oneTimeId
       };
     }
 
@@ -1647,7 +1261,6 @@
     async function runSecurityCheck() {
       const results = [];
       
-      // 检查1: Web Crypto API
       try {
         const subtle = crypto.subtle;
         if (subtle) {
@@ -1671,7 +1284,6 @@
         });
       }
       
-      // 检查2: libsodium状态
       if (sodiumReady) {
         results.push({
           name: 'Argon2 (libsodium)',
@@ -1686,7 +1298,6 @@
         });
       }
       
-      // 检查3: 安全上下文
       if (window.isSecureContext) {
         results.push({
           name: '安全上下文',
@@ -1701,22 +1312,13 @@
         });
       }
       
-      // 检查4: 密码链状态
-      if (passwordChainManager.chain) {
-        results.push({
-          name: '密码哈希链',
-          status: 'ok',
-          message: `已启用，链长度: ${passwordChainManager.chain.length}，当前索引: ${passwordChainManager.chain.currentIndex}`
-        });
-      } else {
-        results.push({
-          name: '密码哈希链',
-          status: 'info',
-          message: '未启用，可选择性使用以限制密码使用次数'
-        });
-      }
+      const oneTimeIds = utils.getDecryptedIds();
+      results.push({
+        name: '一次性解密记录',
+        status: 'info',
+        message: `已记录 ${oneTimeIds.length} 条解密记录`
+      });
       
-      // 显示结果
       displaySecurityResults(results);
     }
 
@@ -1771,12 +1373,12 @@
           elements.encryptBtn.disabled = true;
           elements.encryptBtn.innerHTML = '<span class="loading"></span> 加密中...';
           
-          const { payload, duration, usedChain } = await encryptText(plaintext, password);
+          const { payload, duration, usedOneTime } = await encryptText(plaintext, password);
           elements.output.value = payload;
           
           let message = `✅ 加密完成 (${duration.toFixed(0)}ms)`;
-          if (usedChain) {
-            message += `，密码链索引: ${passwordChainManager.chain.currentIndex - 1}`;
+          if (usedOneTime) {
+            message += '，已启用一次性解密';
           }
           
           utils.showStatus(message, 'ok');
@@ -1813,15 +1415,15 @@
           elements.decryptBtn.disabled = true;
           elements.decryptBtn.innerHTML = '<span class="loading"></span> 解密中...';
           
-          const { text, duration, metadata, usedChain } = await decryptText(encryptedData, password);
+          const { text, duration, metadata, usedOneTime } = await decryptText(encryptedData, password);
           elements.plaintext.value = text;
           
           let message = `✅ 解密完成 (${duration.toFixed(0)}ms)`;
           if (metadata.kdf) {
             message += `，使用 ${metadata.kdf.toUpperCase()}`;
           }
-          if (usedChain) {
-            message += `，密码链已推进到索引 ${passwordChainManager.chain.currentIndex}`;
+          if (usedOneTime) {
+            message += '，此密文已标记为已解密';
           }
           
           utils.showStatus(message, 'ok');
@@ -1935,10 +1537,10 @@
 3. 将生成的密文发送给接收方
 4. 通过另一渠道告知口令
 
-密码链功能：
-• 启用密码链可以限制解密次数
-• 每次解密后密码自动更换
-• 非常适合分享敏感文件
+一次性解密功能：
+• 启用后可防止同一密文重复解密
+• 仅在当前浏览器环境中有效
+• 清除浏览器数据可重置
 
 安全提示：
 - 不要在不安全的网络上传输敏感信息
@@ -2055,156 +1657,13 @@
         elements.opsValue.textContent = `${values[this.value - 2] || '中等'} (${this.value})`;
       });
       
-      // 密码链相关事件
-      // 启用/禁用密码链
-      elements.enableChain.addEventListener('change', async function() {
-        const isEnabled = this.checked;
-        
-        if (isEnabled) {
-          // 如果之前没有密码链，检查当前密码并创建链
-          if (!passwordChainManager.chain) {
-            const password = elements.password.value;
-            if (!password) {
-              utils.showStatus('请先输入密码以创建密码链', 'warning');
-              this.checked = false;
-              return;
-            }
-            
-            try {
-              const chainLength = parseInt(elements.chainLength.value);
-              await passwordChainManager.generateChain(password, chainLength);
-              utils.showStatus(`密码链已创建（${chainLength}次）`, 'ok');
-            } catch (error) {
-              utils.showStatus(`创建密码链失败: ${error.message}`, 'error');
-              this.checked = false;
-              return;
-            }
-          }
-        } else {
-          // 禁用密码链，显示提示
-          utils.showStatus('密码链已禁用，新加密将不使用密码链', 'info');
-        }
-        
-        updateChainUI();
-      });
+      // 一次性解密设置
+      elements.enableOneTime.addEventListener('change', updateOneTimeUI);
       
-      // 链长度滑块
-      elements.chainLength.addEventListener('input', function() {
-        elements.chainLengthValue.textContent = `${this.value} 次`;
-        
-        // 如果已有密码链且已启用，更新链长度（需要重新生成）
-        if (elements.enableChain.checked && passwordChainManager.chain) {
-          utils.showStatus('更改链长度需要重新生成密码链', 'warning');
-        }
-      });
-      
-      // 当前链索引输入
-      elements.currentChainIndex.addEventListener('change', function() {
-        if (passwordChainManager.chain) {
-          const newIndex = parseInt(this.value);
-          if (newIndex >= 0 && newIndex <= passwordChainManager.chain.length) {
-            passwordChainManager.chain.currentIndex = newIndex;
-            passwordChainManager.saveToStorage();
-            updateChainUI();
-            utils.showStatus(`密码链索引已设置为 ${newIndex}`, 'info');
-          }
-        }
-      });
-      
-      // 重置密码链
-      elements.resetChainBtn.addEventListener('click', function() {
-        if (passwordChainManager.chain) {
-          passwordChainManager.reset();
-          updateChainUI();
-          utils.showStatus('密码链已重置', 'ok');
-        }
-      });
-      
-      // 管理密码链按钮
-      elements.manageChainBtn.addEventListener('click', function() {
-        showChainDetails();
-        elements.chainModal.style.display = 'flex';
-      });
-      
-      // 导出密码链按钮
-      elements.exportChainBtn.addEventListener('click', function() {
-        if (!passwordChainManager.chain) {
-          utils.showStatus('没有可导出的密码链', 'warning');
-          return;
-        }
-        
-        const chainData = passwordChainManager.export();
-        const exportText = JSON.stringify(chainData, null, 2);
-        
-        // 复制到剪贴板
-        navigator.clipboard.writeText(exportText).then(() => {
-          utils.showStatus('密码链已复制到剪贴板', 'ok');
-        }).catch(err => {
-          utils.showStatus(`复制失败: ${err.message}`, 'error');
-        });
-      });
-      
-      // 导入密码链按钮
-      elements.importChainBtn.addEventListener('click', function() {
-        elements.importChainModal.style.display = 'flex';
-      });
-      
-      // 关闭模态框按钮
-      elements.closeChainModal.addEventListener('click', () => {
-        elements.chainModal.style.display = 'none';
-      });
-      
-      elements.closeChainBtn.addEventListener('click', () => {
-        elements.chainModal.style.display = 'none';
-      });
-      
-      elements.closeImportChainModal.addEventListener('click', () => {
-        elements.importChainModal.style.display = 'none';
-      });
-      
-      elements.cancelImportChainBtn.addEventListener('click', () => {
-        elements.importChainModal.style.display = 'none';
-      });
-      
-      // 确认导入密码链
-      elements.confirmImportChainBtn.addEventListener('click', async function() {
-        const importData = elements.importChainData.value.trim();
-        
-        if (!importData) {
-          utils.showStatus('请输入密码链数据', 'warning');
-          return;
-        }
-        
-        try {
-          const chainData = JSON.parse(importData);
-          passwordChainManager.import(chainData);
-          
-          // 启用密码链
-          elements.enableChain.checked = true;
-          updateChainUI();
-          
-          elements.importChainModal.style.display = 'none';
-          elements.importChainData.value = '';
-          
-          utils.showStatus('密码链导入成功', 'ok');
-        } catch (error) {
-          utils.showStatus(`导入失败: ${error.message}`, 'error');
-        }
-      });
-      
-      // 复制密码链按钮
-      elements.copyChainBtn.addEventListener('click', async function() {
-        if (!passwordChainManager.chain) return;
-        
-        const chainData = passwordChainManager.export();
-        const exportText = JSON.stringify(chainData, null, 2);
-        
-        try {
-          await navigator.clipboard.writeText(exportText);
-          utils.showStatus('密码链数据已复制到剪贴板', 'ok');
-        } catch (error) {
-          utils.showStatus(`复制失败: ${error.message}`, 'error');
-        }
+      // 清除解密记录
+      elements.clearRecordsBtn.addEventListener('click', () => {
+        utils.clearDecryptedIds();
+        utils.showStatus('✅ 解密记录已清除', 'ok');
       });
       
       // 点击模态框外部关闭
@@ -2215,17 +1674,10 @@
         if (event.target === elements.outputModal) {
           elements.outputModal.style.display = 'none';
         }
-        if (event.target === elements.chainModal) {
-          elements.chainModal.style.display = 'none';
-        }
-        if (event.target === elements.importChainModal) {
-          elements.importChainModal.style.display = 'none';
-        }
       });
       
       // 键盘快捷键
       document.addEventListener('keydown', (event) => {
-        // Ctrl+Enter: 加密
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
           if (elements.plaintext.value && elements.password.value) {
             event.preventDefault();
@@ -2233,38 +1685,21 @@
           }
         }
         
-        // Ctrl+E: 加密
         if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
           event.preventDefault();
           elements.encryptBtn.click();
         }
         
-        // Ctrl+D: 解密
         if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
           event.preventDefault();
           elements.decryptBtn.click();
         }
         
-        // Ctrl+G: 生成口令
         if ((event.ctrlKey || event.metaKey) && event.key === 'g') {
           event.preventDefault();
           elements.genBtn.click();
         }
         
-        // Ctrl+L: 切换密码链
-        if ((event.ctrlKey || event.metaKey) && event.key === 'l') {
-          event.preventDefault();
-          elements.enableChain.checked = !elements.enableChain.checked;
-          elements.enableChain.dispatchEvent(new Event('change'));
-        }
-        
-        // Ctrl+M: 管理密码链
-        if ((event.ctrlKey || event.metaKey) && event.key === 'm') {
-          event.preventDefault();
-          elements.manageChainBtn.click();
-        }
-        
-        // Ctrl+Delete: 清空所有
         if ((event.ctrlKey || event.metaKey) && event.key === 'Delete') {
           event.preventDefault();
           elements.clearTextBtn.click();
@@ -2277,22 +1712,13 @@
     async function init() {
       console.log('SecureCipher 工具初始化...');
       
-      // 检测libsodium
       await detectSodium();
-      
-      // 设置事件监听器
       setupEventListeners();
-      
-      // 初始化口令强度显示
       updatePasswordStrength();
+      updateOneTimeUI();
       
-      // 初始化密码链UI
-      updateChainUI();
-      
-      // 显示初始化完成消息
       utils.showStatus('工具已准备就绪，可以开始加密/解密操作', 'ok', 3000);
       
-      // 添加CSS动画
       const style = document.createElement('style');
       style.textContent = `
         @keyframes spin {
@@ -2306,7 +1732,6 @@
       document.head.appendChild(style);
     }
 
-    // 页面加载完成后初始化
     document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>

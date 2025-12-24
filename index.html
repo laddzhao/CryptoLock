@@ -48,22 +48,7 @@
     button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
     button.secondary { background: transparent; color: var(--accent); border: 2px solid var(--border); }
     button.secondary:hover:not(:disabled) { background: rgba(37, 99, 235, 0.1); border-color: var(--accent); }
-    button.verify-btn {
-  background: linear-gradient(135deg, #0ea5e9, #3b82f6);
-  color: white;
-  border: none;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-}
-
-button.verify-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0284c7, #2563eb);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4);
-}
-
-button.verify-btn:active {
-  transform: translateY(0);
-}
+    button.verify-btn:hover:not(:disabled) { border-color: var(--accent); }
     .status { padding: 12px; border-radius: 8px; margin: 8px 0; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
     .status.ok { background: rgba(22, 163, 74, 0.1); color: var(--ok); border-left: 4px solid var(--ok); }
     .status.info { background: rgba(14, 165, 233, 0.1); color: var(--secondary); border-left: 4px solid var(--secondary); }
@@ -221,7 +206,6 @@ button.verify-btn:active {
         <button id="decryptBtn" class="secondary">解密文本</button>
         <button id="copyBtn" class="secondary">复制输出</button>
         <button id="downloadBtn" class="secondary">下载密文</button>
-        <a href="verify.html" style="text-decoration: none;"><button class="secondary">文件校验</button></a>
         <a href="verify.html" style="text-decoration: none;"><button class="verify-btn">文件校验</button></a>
       </div>
     </section>

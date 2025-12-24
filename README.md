@@ -39,3 +39,4 @@ cd CryptoLock
 # 使用本地服务器运行（推荐）
 python -m http.server 8000
 # 或直接打开 index.html
+```

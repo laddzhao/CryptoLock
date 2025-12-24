@@ -26,6 +26,12 @@ CryptoLock 是一个完全在浏览器中运行的本地加密/解密和文件�
 
 ## 🚀 快速开始
 
+### 一键下载
+您可以直接下载完整的项目压缩包：[Download CryptoLock_Project.zip](https://github.com/laddzhao/CryptoLock/releases/download/v1.0.0/CryptoLock-main.zip)
+
+### 在线使用
+也可以直接在线体验：[加密工具](https://laddzhao.github.io/CryptoLock) | [文件校验工具](https://laddzhao.github.io/CryptoLock/verify.html)
+
 ### 方法一：直接使用
 1. 下载或克隆本项目
 2. 在浏览器中打开 `index.html` 或 `verify.html`
